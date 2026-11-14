@@ -91,6 +91,8 @@ def load_config(path: Path | None = None) -> dict:
         raise ValueError("OSCQuery port must be between 1 and 65535.")
     config = {"serverUrl": base_url, "oscHost": osc_host, "oscPort": port,
               "oscQueryPort": query_port}
+    config['profiles'] = data.get('profiles', {}) if isinstance(data.get('profiles'), dict) else {}
+    config['syncHeight'] = data.get('syncHeight', True) is True
     if "token" in data or "metersPerUnit" in data:
         save_config(config, target)
     return config
@@ -122,6 +124,8 @@ def configure(path: Path | None = None, ask_server_url: bool = True) -> Path:
         "oscPort": osc_port,
         "oscQueryPort": int(current.get("oscQueryPort", 9001)),
     }
+    config['profiles'] = current.get('profiles', {}) if isinstance(current.get('profiles'), dict) else {}
+    config['syncHeight'] = current.get('syncHeight', True) is True
     target = save_config(config, path)
     print(f"Saved companion settings to {target}")
     return target
@@ -162,8 +166,8 @@ def _request(config: dict, path: str):
         with opener.open(request, timeout=12) as response:
             if response.status == 204:
                 return None
-            raw = response.read(16_384)
-            if len(raw) >= 16_384:
+            raw = response.read(1_048_577)
+            if len(raw) > 1_048_576:
                 raise RuntimeError("Server response was too large.")
             return json.loads(raw.decode("utf-8")) if raw else None
     except HTTPError as err:
@@ -198,7 +202,7 @@ def vrchat_osc_ready(host: str = DEFAULT_OSC_HOST, query_port: int = 9001) -> bo
         with urlopen(request, timeout=1.5) as response:
             if response.status != 200:
                 return False
-            return isinstance(json.loads(response.read(16_384).decode("utf-8")), dict)
+            return isinstance(json.loads(response.read(1_048_577).decode("utf-8")), dict)
     except (OSError, ValueError, URLError, TimeoutError):
         return False
 
