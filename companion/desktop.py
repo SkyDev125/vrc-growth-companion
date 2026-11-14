@@ -32,7 +32,7 @@ class CompanionWindow:
         self.worker = None
         root.title("Mid's Den Companion")
         root.geometry('980x800')
-        root.minsize(820, 720)
+        root.minsize(820, 800)
         self.theme()
         frame = ttk.Frame(root, padding=24)
         frame.pack(fill='both', expand=True)
@@ -98,7 +98,7 @@ class CompanionWindow:
         ttk.Button(toolbar,text='+ Eye height preset',command=self.add_eye_height).pack(side='right')
         self.profile_label = tk.StringVar(value='Manual / shared mappings')
         ttk.Label(frame, textvariable=self.profile_label, font=('', 12, 'bold')).pack(anchor='w', pady=(16, 6))
-        self.table = ttk.Treeview(frame, columns=('source','target','mode'), show='headings', height=5,selectmode='browse')
+        self.table = ttk.Treeview(frame, columns=('source','target','mode'), show='headings', height=2,selectmode='browse')
         for key, title, width in [('source','Measurement',180),('target','Avatar parameter',280),('mode','Mapping',120)]:
             self.table.heading(key, text=title)
             self.table.column(key, width=width)
