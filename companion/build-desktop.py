@@ -1,6 +1,7 @@
 """Run on each target OS with PyInstaller installed; produces native desktop artifacts."""
 from pathlib import Path
 import shutil
+import os
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,7 @@ import tempfile
 project = Path(__file__).resolve().parents[1]
 out = project / 'public/downloads'
 name = 'MidsDenCompanion'
-subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed', '--name', name, '--distpath', str(out), str(project / 'companion/desktop.py')], check=True)
+subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed', '--add-data', str(project / 'companion/measurement-units.json') + os.pathsep + '.', '--name', name, '--distpath', str(out), str(project / 'companion/desktop.py')], check=True)
 if sys.platform == 'win32':
     compiler = shutil.which('ISCC')
     if not compiler:

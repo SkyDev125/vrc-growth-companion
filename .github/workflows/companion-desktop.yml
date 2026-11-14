@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
     paths:
+      - companion/measurement_format.py
+      - companion/measurement-units.json
+      - companion/measurement-examples.json
       - companion/desktop.py
       - companion/vrchat_companion.py
       - companion/build-desktop.py

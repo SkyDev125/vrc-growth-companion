@@ -1,0 +1,229 @@
+[
+  {
+    "units": [
+      {
+        "unit": "µm",
+        "factor": 1e-06
+      },
+      {
+        "unit": "mm",
+        "factor": 0.001
+      },
+      {
+        "unit": "cm",
+        "factor": 0.01
+      },
+      {
+        "unit": "m",
+        "factor": 1
+      },
+      {
+        "unit": "km",
+        "factor": 1000
+      }
+    ],
+    "aliases": {
+      "μm": "µm",
+      "um": "µm"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "mm²",
+        "factor": 1e-06
+      },
+      {
+        "unit": "cm²",
+        "factor": 0.0001
+      },
+      {
+        "unit": "m²",
+        "factor": 1
+      },
+      {
+        "unit": "km²",
+        "factor": 1000000.0
+      }
+    ],
+    "aliases": {
+      "mm2": "mm²",
+      "mm^2": "mm²",
+      "cm2": "cm²",
+      "cm^2": "cm²",
+      "m2": "m²",
+      "m^2": "m²",
+      "km2": "km²",
+      "km^2": "km²"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "µL",
+        "factor": 1e-06
+      },
+      {
+        "unit": "mL",
+        "factor": 0.001
+      },
+      {
+        "unit": "L",
+        "factor": 1
+      },
+      {
+        "unit": "m³",
+        "factor": 1000
+      }
+    ],
+    "aliases": {
+      "μL": "µL",
+      "ul": "µL",
+      "uL": "µL",
+      "ml": "mL",
+      "l": "L",
+      "liter": "L",
+      "liters": "L",
+      "litre": "L",
+      "litres": "L",
+      "cm³": {
+        "factor": 0.001
+      },
+      "cm3": {
+        "factor": 0.001
+      },
+      "cm^3": {
+        "factor": 0.001
+      },
+      "m3": "m³",
+      "m^3": "m³",
+      "mm³": {
+        "factor": 1e-06
+      },
+      "mm3": {
+        "factor": 1e-06
+      },
+      "mm^3": {
+        "factor": 1e-06
+      },
+      "cL": {
+        "factor": 0.01
+      },
+      "cl": {
+        "factor": 0.01
+      },
+      "dL": {
+        "factor": 0.1
+      },
+      "dl": {
+        "factor": 0.1
+      },
+      "kL": "m³"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "µg",
+        "factor": 1e-06
+      },
+      {
+        "unit": "mg",
+        "factor": 0.001
+      },
+      {
+        "unit": "g",
+        "factor": 1
+      },
+      {
+        "unit": "kg",
+        "factor": 1000
+      },
+      {
+        "unit": "t",
+        "factor": 1000000.0
+      }
+    ],
+    "aliases": {
+      "μg": "µg",
+      "ug": "µg"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "ms",
+        "factor": 0.001
+      },
+      {
+        "unit": "s",
+        "factor": 1
+      },
+      {
+        "unit": "min",
+        "factor": 60
+      },
+      {
+        "unit": "h",
+        "factor": 3600
+      },
+      {
+        "unit": "d",
+        "factor": 86400
+      }
+    ],
+    "aliases": {
+      "sec": "s",
+      "second": "s",
+      "seconds": "s",
+      "minute": "min",
+      "minutes": "min",
+      "hr": "h",
+      "hour": "h",
+      "hours": "h",
+      "day": "d",
+      "days": "d"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "in",
+        "factor": 1
+      },
+      {
+        "unit": "ft",
+        "factor": 12
+      },
+      {
+        "unit": "yd",
+        "factor": 36
+      },
+      {
+        "unit": "mi",
+        "factor": 63360
+      }
+    ],
+    "aliases": {
+      "inch": "in",
+      "inches": "in",
+      "foot": "ft",
+      "feet": "ft"
+    }
+  },
+  {
+    "units": [
+      {
+        "unit": "oz",
+        "factor": 1
+      },
+      {
+        "unit": "lb",
+        "factor": 16
+      }
+    ],
+    "aliases": {
+      "lbs": "lb"
+    }
+  }
+]

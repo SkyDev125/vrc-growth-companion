@@ -18,6 +18,8 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 
+from measurement_format import format_measurement
+
 DEFAULT_URL = "https://mid.shardware.net"
 DEFAULT_POLL_SECONDS = 5
 MIN_METERS = 0.01
@@ -216,7 +218,7 @@ def run(config: dict, once: bool = False) -> int:
                 # later or changing avatars does not require restarting the companion.
                 send_eyeheight(meters, config["oscPort"], config["oscHost"])
                 if last_state != "sending" or last_height != meters:
-                    print(f"Sending height: {meters:g} m to {config['oscHost']}:{config['oscPort']} (OSC UDP).")
+                    print(f"Sending height: {format_measurement(meters, 'm')} to {config['oscHost']}:{config['oscPort']} (OSC UDP).")
                 last_height = meters
                 last_state = "sending"
         except (RuntimeError, ValueError, OSError) as err:

@@ -10,6 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 import vrchat_companion as core
+from measurement_format import format_measurement
 
 
 def settings_path():
@@ -88,7 +89,7 @@ class CompanionWindow:
                     self.events.put('Set your starting height on the website.')
                 else:
                     core.send_eyeheight(height, config['oscPort'], config['oscHost'])
-                    self.events.put(f"Sending {height:g} m to {config['oscHost']}:{config['oscPort']}")
+                    self.events.put(f"Sending {format_measurement(height, 'm')} to {config['oscHost']}:{config['oscPort']}")
             except (OSError, ValueError, RuntimeError) as error:
                 self.events.put(str(error))
             stop.wait(core.DEFAULT_POLL_SECONDS)
