@@ -9,31 +9,34 @@ import sys
 import threading
 import time
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QScrollArea,QDialog,QComboBox,QLineEdit,QCheckBox,QDialogButtonBox,QMessageBox)
+from PySide6.QtGui import QFont,QPainter,QPen,QColor
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QScrollArea,QDialog,QComboBox,QLineEdit,QCheckBox,QDialogButtonBox,QMessageBox,QCompleter,QStyleOptionButton,QStyle)
 import vrchat_companion as core
 import avatar_mapping as mapping
 from measurement_format import format_measurement
 
 STYLE = """
-QWidget { background:#111416; color:#ecefee; font-family: 'Segoe UI', 'Inter', sans-serif; font-size:14px; }
+QWidget { background:#111416; color:#ecefee; font-family: 'Segoe UI', 'Inter', 'Noto Sans', 'DejaVu Sans', sans-serif; font-size:13px; }
 QLabel { background:transparent; }
-QLabel#brand { font-size:25px; font-weight:700; }
+QLabel#brand { font-size:19px; font-weight:700; }
 QLabel#heading { font-size:30px; font-weight:700; }
 QLabel#muted { color:#99a4a4; }
 QLabel#eyebrow { color:#c8b58c; font-size:11px; font-weight:700; }
-QFrame#card { background:#1b2023; border:1px solid #2c3438; border-radius:18px; }
+QFrame#card { background:#1b2023; border:1px solid #2c3438; border-radius:10px; }
 QFrame#status { background:#182523; border:1px solid #2b4540; border-radius:16px; }
-QPushButton { background:#252d31; border:1px solid #364044; border-radius:10px; padding:10px 16px; font-weight:600; }
+QPushButton { background:#252d31; border:1px solid #364044; border-radius:10px; padding:7px 12px; font-weight:600; }
 QPushButton:hover { background:#354045; border-color:#526268; }
 QPushButton:pressed { background:#182023; }
 QPushButton#primary { background:#dfc48d; border-color:#dfc48d; color:#201d17; }
 QPushButton#primary:hover { background:#f0d8a8; }
 QPushButton#subtle { background:transparent; border:0; color:#aeb9b9; }
 QPushButton#danger { color:#f6a69c; }
-QLineEdit,QComboBox { background:#222a2e; border:1px solid #3b474d; border-radius:10px; padding:11px; selection-background-color:#566c69; }
+QLineEdit,QComboBox { background:#222a2e; border:1px solid #3b474d; border-radius:10px; padding:7px 10px; selection-background-color:#566c69; }
 QLineEdit:focus,QComboBox:focus { border:1px solid #dfc48d; }
 QComboBox::drop-down { border:0; width:28px; }
+QComboBox QLineEdit { padding:0; border:0; background:transparent; }
+QPushButton#subtle:hover { background:#252d31; color:#ecefee; }
+QPushButton#danger:hover { background:#3a2224; color:#f6a69c; }
 QComboBox QAbstractItemView { background:#222a2e; color:#ecefee; selection-background-color:#3c514d; padding:8px; }
 QCheckBox { spacing:10px; background:transparent; }
 QCheckBox::indicator { width:19px; height:19px; border:1px solid #53635f; border-radius:6px; background:#222a2e; }
@@ -64,28 +67,78 @@ def button(text,callback,role=None):
     return widget
 
 
+class VisibleComboBox(QComboBox):
+    """Keep the browse affordance visible on dark themes on every OS."""
+    def wheelEvent(self,event):
+        if self.view().isVisible():super().wheelEvent(event)
+        else:event.ignore()
+
+    def paintEvent(self,event):
+        super().paintEvent(event)
+        painter=QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor('#bac7c6'),1.6))
+        x,y=self.width()-18,self.height()//2
+        painter.drawLine(x-4,y-2,x,y+2)
+        painter.drawLine(x,y+2,x+4,y-2)
+
+
+class VisibleCheckBox(QCheckBox):
+    def paintEvent(self,event):
+        super().paintEvent(event)
+        if not self.isChecked():return
+        option=QStyleOptionButton();self.initStyleOption(option)
+        rect=self.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator,option,self)
+        painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor('#201d17'),2))
+        x,y=rect.center().x(),rect.center().y()
+        painter.drawLine(x-5,y,x-1,y+4);painter.drawLine(x-1,y+4,x+6,y-4)
+
+
 class MappingDialog(QDialog):
     MODES={'Current value':'value','Growth ratio':'ratio','Map a range':'range','On / off threshold':'threshold'}
     def __init__(self,owner,index=None,preset=None):
         super().__init__(owner)
         self.owner,self.index,self.profile=owner,index,owner.profile
         self.setWindowTitle('Mapping · Mid’s Den')
-        self.setMinimumWidth(620)
+        self.setFixedWidth(600)
         self.setModal(True)
-        layout=QVBoxLayout(self);layout.setContentsMargins(30,28,30,28);layout.setSpacing(18)
-        layout.addWidget(label('MAKE A CONNECTION','eyebrow'))
-        layout.addWidget(label('Your measurement. Your avatar.','brand'))
-        grid=QGridLayout();grid.setSpacing(12)
-        self.source=QComboBox()
+        layout=QVBoxLayout(self);layout.setContentsMargins(22,20,22,20);layout.setSpacing(12)
+        layout.addWidget(label('Edit mapping' if index is not None else 'New mapping','brand'))
+        grid=QGridLayout();grid.setHorizontalSpacing(12);grid.setVerticalSpacing(6);grid.setColumnStretch(0,1);grid.setColumnStretch(1,2)
+        self.source=VisibleComboBox()
         for source in owner.sources:self.source.addItem(f"{source['name']} · {source['unit']}",source['id'])
-        self.target=QComboBox();self.target.setEditable(True)
+        self.target=VisibleComboBox();self.target.setEditable(True)
         self.target.addItem('Eye height','/avatar/eyeheight')
-        for address in sorted((owner.discovery or {}).get('parameters',{})):
+        available=(owner.discovery or {}).get('allParameters') or {address:{'kind':kind,'writable':True} for address,kind in (owner.discovery or {}).get('parameters',{}).items()}
+        for address,info in sorted(available.items()):
             self.target.addItem(address.removeprefix(mapping.PREFIX),address)
+            entry=self.target.model().item(self.target.count()-1)
+            usable=info.get('writable') and info.get('kind') in ('float','int','bool')
+            entry.setEnabled(bool(usable))
+            entry.setToolTip(address+' · '+str(info.get('kind') or 'unsupported type')+('' if usable else ' · read-only or unsupported'))
+        for combo in (self.source,self.target):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(14)
         self.target.setCurrentIndex(-1);self.target.lineEdit().setPlaceholderText('Search or enter a parameter')
-        self.kind=QComboBox();self.kind.addItems(['float','int','bool'])
-        self.mode=QComboBox();self.mode.addItems(list(self.MODES))
-        for col,title,widget in [(0,'Website measurement',self.source),(1,'Avatar parameter',self.target)]:
+        self.target.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.target.setMaxVisibleItems(12)
+        self.target.view().setMaximumHeight(300)
+        completer=QCompleter(self.target.model(),self.target)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.target.setCompleter(completer)
+        completer.activated.connect(self.complete_target)
+        target_field=QWidget();target_layout=QHBoxLayout(target_field);target_layout.setContentsMargins(0,0,0,0);target_layout.setSpacing(6)
+        target_layout.addWidget(self.target,1)
+        self.browse=button('All ▾',self.target.showPopup)
+        self.browse.setToolTip('Browse all available parameters')
+        target_layout.addWidget(self.browse)
+
+        self.kind=VisibleComboBox();self.kind.addItems(['float','int','bool'])
+        self.mode=VisibleComboBox();self.mode.addItems(list(self.MODES))
+        for col,title,widget in [(0,'Website measurement',self.source),(1,f"Avatar parameter · {len(available)} discovered",target_field)]:
             grid.addWidget(label(title,'muted'),0,col);grid.addWidget(widget,1,col)
         grid.addWidget(label('Value type','muted'),2,0);grid.addWidget(self.kind,3,0)
         grid.addWidget(label('Send as','muted'),2,1);grid.addWidget(self.mode,3,1)
@@ -97,8 +150,8 @@ class MappingDialog(QDialog):
             ranges.addWidget(label(title,'muted'),(i//2)*2,i%2);ranges.addWidget(field,(i//2)*2+1,i%2)
         layout.addWidget(self.range_box)
         self.hint=label('','muted');self.hint.setWordWrap(True);layout.addWidget(self.hint)
-        self.error=label('');self.error.setStyleSheet('color:#f6a69c');self.error.setWordWrap(True);layout.addWidget(self.error)
-        actions=QHBoxLayout();self.enabled=QCheckBox('Mapping enabled');self.enabled.setChecked(True);actions.addWidget(self.enabled);actions.addStretch()
+        self.error=label('');self.error.setStyleSheet('color:#f6a69c');self.error.setWordWrap(True);self.error.hide();layout.addWidget(self.error)
+        actions=QHBoxLayout();self.enabled=VisibleCheckBox('Mapping enabled');self.enabled.setChecked(True);actions.addWidget(self.enabled);actions.addStretch()
         actions.addWidget(button('Cancel',self.reject,'subtle'));actions.addWidget(button('Save mapping',self.save,'primary'));layout.addLayout(actions)
         item=preset or (owner.config['profiles'][self.profile][index] if index is not None else None)
         if item:
@@ -115,6 +168,12 @@ class MappingDialog(QDialog):
         self.mode.currentTextChanged.connect(self.update_fields)
         self.source.currentIndexChanged.connect(self.update_fields)
         self.update_fields()
+
+    def complete_target(self,text):
+        index=self.target.findText(text)
+        if index>=0:
+            self.target.setCurrentIndex(index)
+            self.choose_target()
 
     def choose_target(self,*_):
         address=self.target.currentData()
@@ -145,7 +204,8 @@ class MappingDialog(QDialog):
     def save(self):
         try:
             if self.profile!=self.owner.profile:raise ValueError('Avatar changed. Open the mapping again.')
-            target=self.target.currentData() if self.target.currentIndex()>=0 and self.target.currentText()==self.target.itemText(self.target.currentIndex()) else self.target.currentText()
+            index=self.target.findText(self.target.currentText())
+            target=self.target.itemData(index) if index>=0 else self.target.currentText()
             item=mapping.validate_mapping(dict(source=self.source.currentData(),target=target,kind=self.kind.currentText(),mode=self.MODES[self.mode.currentText()],enabled=self.enabled.isChecked(),**{k:f.text() for k,f in self.fields.items()}))
             info=(self.owner.discovery or {}).get('allParameters',{}).get(item['target'])
             if info and (not info['writable'] or info['kind']!=item['kind']):raise ValueError('Choose a writable parameter with the matching type.')
@@ -155,28 +215,28 @@ class MappingDialog(QDialog):
             else:items[self.index]=item
             with self.owner.lock:self.owner.config['profiles'][self.profile]=items
             self.owner.persist();self.owner.refresh_cards();self.accept()
-        except (ValueError,OSError) as error:self.error.setText(str(error))
+        except (ValueError,OSError) as error:
+            self.error.setText(str(error));self.error.show();self.adjustSize()
 
 
 class CompanionWindow(QMainWindow):
     def __init__(self,auto_start=True):
         super().__init__()
-        self.setWindowTitle('Mid’s Den · Companion');self.resize(1000,720);self.setMinimumSize(820,580)
+        self.setWindowTitle('Mid’s Den · Companion');self.resize(860,430);self.setMinimumSize(760,360)
         self.events=queue.Queue();self.lock=threading.Lock();self.stop_event=threading.Event();self.worker=None
         self.sources=[];self.discovery=None;self.profile='manual';self.dialog=None
         try:self.config=core.load_config(settings_path())
         except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
         mapping.migrate_profiles(self.config)
-        body=QWidget();self.setCentralWidget(body);outer=QVBoxLayout(body);outer.setContentsMargins(34,28,34,24);outer.setSpacing(24)
-        header=QHBoxLayout();brand=QVBoxLayout();brand.addWidget(label('MID’S DEN','eyebrow'));brand.addWidget(label('Companion','brand'));header.addLayout(brand);header.addStretch()
+        body=QWidget();self.setCentralWidget(body);outer=QVBoxLayout(body);outer.setContentsMargins(20,16,20,14);outer.setSpacing(12)
+        header=QHBoxLayout();brand=QVBoxLayout();brand.addWidget(label('Mid’s Den · Companion','brand'));header.addLayout(brand);header.addStretch()
         header.addWidget(button('Connection settings',self.settings,'subtle'));self.pause=button('Pause',self.toggle_run);header.addWidget(self.pause);outer.addLayout(header)
-        status=QFrame();status.setObjectName('status');sl=QHBoxLayout(status);sl.setContentsMargins(20,18,20,18)
-        connection=QVBoxLayout();self.connection=label('●  Looking for VRChat');self.connection.setStyleSheet('font-weight:600;color:#9cceba');connection.addWidget(self.connection)
-        self.profile_label=label('Enable OSC in VRChat to discover your avatar.','muted');connection.addWidget(self.profile_label);sl.addLayout(connection);sl.addStretch()
+        status=QFrame();status.setObjectName('status');sl=QHBoxLayout(status);sl.setContentsMargins(12,10,12,10)
+        connection=QHBoxLayout();connection.setSpacing(16);self.connection=label('●  Looking for VRChat');self.connection.setStyleSheet('font-weight:600;color:#9cceba');connection.addWidget(self.connection)
+        self.profile_label=label('Enable OSC in VRChat','muted');connection.addWidget(self.profile_label);sl.addLayout(connection);sl.addStretch()
         self.measure_count=label('0 measurements','muted');sl.addWidget(self.measure_count);outer.addWidget(status)
-        heading=QHBoxLayout();titles=QVBoxLayout();titles.addWidget(label('Bring your growth to life.','heading'));titles.addWidget(label('Connect measurements to your avatar.','muted'));heading.addLayout(titles);heading.addStretch();outer.addLayout(heading)
         tools=QHBoxLayout();tools.addWidget(label('YOUR MAPPINGS','eyebrow'));tools.addStretch();tools.addWidget(button('+ Eye height',self.add_eye_height));tools.addWidget(button('+ New mapping',self.new_mapping,'primary'));outer.addLayout(tools)
-        scroll=QScrollArea();scroll.setWidgetResizable(True);self.cards=QWidget();self.card_layout=QVBoxLayout(self.cards);self.card_layout.setContentsMargins(0,0,8,0);self.card_layout.setSpacing(12);self.card_layout.setAlignment(Qt.AlignmentFlag.AlignTop);scroll.setWidget(self.cards);outer.addWidget(scroll,1)
+        scroll=QScrollArea();scroll.setWidgetResizable(True);self.cards=QWidget();self.card_layout=QVBoxLayout(self.cards);self.card_layout.setContentsMargins(0,0,8,0);self.card_layout.setSpacing(6);self.card_layout.setAlignment(Qt.AlignmentFlag.AlignTop);scroll.setWidget(self.cards);outer.addWidget(scroll,1)
         footer=QHBoxLayout();self.status=label('Ready','muted');footer.addWidget(self.status);footer.addStretch();footer.addWidget(label('Updates every 5 seconds','muted'));outer.addLayout(footer)
         self.refresh_cards();self.timer=QTimer(self);self.timer.timeout.connect(self.drain);self.timer.start(100)
         if auto_start:self.start()
@@ -185,34 +245,62 @@ class CompanionWindow(QMainWindow):
         with self.lock:core.save_config(self.config,settings_path())
 
     def refresh_cards(self):
+        signature=(self.profile,json.dumps(self.config['profiles'].get(self.profile,[]),sort_keys=True),tuple((s['id'],s['name'],s['unit']) for s in self.sources))
+        if getattr(self,'_cards_signature',None)==signature:
+            sources={s['id']:s for s in self.sources}
+            for source_id,widget in self._value_labels:
+                source=sources.get(source_id)
+                widget.setText(format_measurement(source['value'],source['unit']) if source else 'Waiting for website')
+            for item,widget in self._output_labels:self.update_output(item,widget,sources)
+            return
+        self._cards_signature=signature
+        self._value_labels=[]
+        self._output_labels=[]
         while self.card_layout.count():
             item=self.card_layout.takeAt(0)
-            if item.widget():item.widget().deleteLater()
+            if item.widget():
+                item.widget().hide();item.widget().deleteLater()
         sources={s['id']:s for s in self.sources}
         items=self.config['profiles'].get(self.profile,[])
         if not items:
-            empty=QFrame();empty.setObjectName('card');layout=QVBoxLayout(empty);layout.setContentsMargins(28,30,28,30);layout.addWidget(label('Your next connection starts here.','brand'));layout.addWidget(label('Add a mapping, or start with the eye-height preset.','muted'));self.card_layout.addWidget(empty)
+            empty=QFrame();empty.setObjectName('card');layout=QVBoxLayout(empty);layout.setContentsMargins(18,20,18,20);layout.addWidget(label('No mappings yet','brand'));layout.addWidget(label('Add a mapping or choose the eye-height preset.','muted'));self.card_layout.addWidget(empty)
         for index,item in enumerate(items):
-            card=QFrame();card.setObjectName('card');row=QHBoxLayout(card);row.setContentsMargins(20,18,20,18);row.setSpacing(18)
-            enabled=QCheckBox();enabled.setChecked(item.get('enabled',True));enabled.setToolTip('Enable mapping');enabled.toggled.connect(lambda checked,i=index:self.enable_mapping(i,checked));row.addWidget(enabled)
+            card=QFrame();card.setObjectName('card');row=QHBoxLayout(card);row.setContentsMargins(12,9,12,9);row.setSpacing(12)
+            enabled=VisibleCheckBox('On' if item.get('enabled',True) else 'Off');enabled.setChecked(item.get('enabled',True));enabled.setToolTip('Enable mapping');enabled.toggled.connect(lambda checked,i=index:self.enable_mapping(i,checked));row.addWidget(enabled)
             source=sources.get(item['source'],{});left=QVBoxLayout();left.addWidget(label(source.get('name','Height' if item['source']=='height' else item['source'])))
-            left.addWidget(label(format_measurement(source['value'],source['unit']) if source else 'Waiting for website','muted'));row.addLayout(left,1)
-            arrow=label('→');arrow.setStyleSheet('font-size:24px;color:#c8b58c');row.addWidget(arrow)
-            right=QVBoxLayout();target='Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX);name=label(target);name.setWordWrap(True);right.addWidget(name)
-            modes={'value':'Current value','ratio':'Growth ratio','range':'Mapped range','threshold':'On / off threshold'};right.addWidget(label(modes[item['mode']],'muted'));row.addLayout(right,2)
-            row.addWidget(button('Edit',lambda _=False,i=index:self.edit_mapping(i),'subtle'));row.addWidget(button('×',lambda _=False,i=index:self.remove_mapping(i),'subtle'));self.card_layout.addWidget(card)
+            value_label=label(format_measurement(source['value'],source['unit']) if source else 'Waiting for website','muted');self._value_labels.append((item['source'],value_label));left.addWidget(value_label);row.addLayout(left,1)
+            arrow=label('→');arrow.setStyleSheet('font-size:18px;color:#c8b58c');row.addWidget(arrow)
+            right=QVBoxLayout();target='Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX);name=label(target);name.setWordWrap(True);name.setToolTip(item['target']);right.addWidget(name)
+            modes={'value':'Current value','ratio':'Growth ratio','range':'Mapped range','threshold':'On / off threshold'};description=modes[item['mode']]+' · '+item['kind'];right.addWidget(label(description,'muted'));row.addLayout(right,2)
+            output=label('','muted');output.setMinimumWidth(80);output.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter);output.setToolTip('Calculated OSC output. UDP delivery is not acknowledged.');self._output_labels.append((item,output));self.update_output(item,output,sources);row.addWidget(output)
+            row.addWidget(button('Edit',lambda _=False,i=index:self.edit_mapping(i),'subtle'));remove=button('×',lambda _=False,i=index:self.remove_mapping(i),'danger');remove.setToolTip('Remove mapping');row.addWidget(remove);self.card_layout.addWidget(card)
+
+    def update_output(self,item,widget,sources):
+        if not item.get('enabled',True):widget.setText('Paused');return
+        if item['source'] not in sources:widget.setText('Waiting');return
+        if not mapping.can_send(item,sources,self.discovery):widget.setText('Unavailable');return
+        try:
+            value=mapping.mapped_value(item,sources[item['source']])
+            widget.setText(('On' if value else 'Off') if isinstance(value,bool) else f'{value:.4g}')
+        except (ValueError,KeyError,TypeError,OverflowError):widget.setText('Invalid')
 
     def enable_mapping(self,index,checked):
         try:
             with self.lock:self.config['profiles'][self.profile][index]['enabled']=checked
-            self.persist()
+            self.persist();self.refresh_cards()
         except OSError as error:self.status.setText(str(error))
 
     def new_mapping(self):self.open_editor()
     def edit_mapping(self,index):self.open_editor(index)
     def open_editor(self,index=None,preset=None):
         if self.dialog:self.dialog.close()
-        self.dialog=MappingDialog(self,index,preset);self.dialog.show()
+        self.dialog=MappingDialog(self,index,preset)
+        active=self.dialog
+        self.dialog.finished.connect(lambda _result:self.clear_editor(active))
+        self.dialog.show()
+    def clear_editor(self,dialog):
+        if self.dialog is dialog:self.dialog=None
+
     def add_eye_height(self):
         items=self.config['profiles'].get(self.profile,[])
         index=next((i for i,item in enumerate(items) if item['target']=='/avatar/eyeheight'),None)
@@ -226,7 +314,7 @@ class CompanionWindow(QMainWindow):
         layout.addWidget(label('Connect to VRChat','brand'))
         host=QLineEdit(self.config['oscHost']);port=QLineEdit(str(self.config['oscPort']))
         for title,field in [('VRChat IP address',host),('OSC receive port',port)]:layout.addWidget(label(title,'muted'));layout.addWidget(field)
-        error_label=label('');layout.addWidget(error_label)
+        error_label=label('');error_label.setStyleSheet('color:#f6a69c');error_label.setWordWrap(True);layout.addWidget(error_label)
         def save():
             try:
                 address=core.validate_osc_host(host.text());number=int(port.text())
@@ -255,7 +343,8 @@ class CompanionWindow(QMainWindow):
             elif value[0]=='status':self.status.setText(value[1])
             else:
                 self.sources,self.discovery=value[1:];profile=mapping.profile_key(self.discovery)
-                if profile!=self.profile and self.dialog:self.dialog.close();self.dialog=None
+                if self.dialog and profile!=self.dialog.profile:
+                    self.dialog.error.setText('Avatar changed. Reopen this mapping before saving.');self.dialog.error.show()
                 self.profile=profile;self.profile_label.setText('Avatar · '+profile[-8:] if profile!='manual' else 'Shared mappings · avatar discovery unavailable')
                 self.measure_count.setText(f'{len(self.sources)} measurements');self.refresh_cards()
 
@@ -293,7 +382,7 @@ class CompanionWindow(QMainWindow):
                         mapping.send_mapping(config,item,source_map[item['source']])
                         sent+=1
                     except (OSError,ValueError,KeyError,TypeError,OverflowError): skipped+=1
-                self.events.put(('status',f"Sending to {config['oscHost']}:{config['oscPort']} · {sent} mappings"+(f' · {skipped} unavailable' if skipped else '')))
+                self.events.put(('status',f"Syncing · {sent} active mapping{'s' if sent != 1 else ''}"+(f' · {skipped} unavailable' if skipped else '')))
             except (OSError,ValueError,RuntimeError) as error:
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)

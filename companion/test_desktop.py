@@ -43,4 +43,40 @@ class DesktopTests(unittest.TestCase):
   self.window.open_editor(0)
   self.window.config['profiles']['avtr_b']=[]
   self.window.events.put(('data',self.window.sources,{'avatar':'avtr_b','parameters':{}}));self.window.drain()
-  self.assertEqual(self.window.profile,'avtr_b');self.assertIsNone(self.window.dialog)
+  self.assertEqual(self.window.profile,'avtr_b');self.assertIn('Avatar changed',self.window.dialog.error.text())
+
+ def test_search_and_browse_keep_all_parameters_available(self):
+  self.window.discovery={'parameters':{'/avatar/parameters/TailSize':'float','/avatar/parameters/EarToggle':'bool'}}
+  d=desktop.MappingDialog(self.window)
+  d.target.completer().setCompletionPrefix('size')
+  self.assertEqual(d.target.completer().completionCount(),1)
+  self.assertEqual(d.target.count(),3)
+  self.assertEqual(d.browse.text(),'All ▾')
+  d.complete_target('TailSize')
+  self.assertEqual(d.target.currentData(),'/avatar/parameters/TailSize')
+  d.save()
+  self.assertEqual(self.window.config['profiles']['manual'][-1]['target'],'/avatar/parameters/TailSize')
+
+ def test_value_refresh_keeps_existing_cards(self):
+  self.window.refresh_cards()
+  widget=self.window._value_labels[0][1]
+  self.window.sources[0]['value']=4
+  self.window.refresh_cards()
+  self.assertIs(widget,self.window._value_labels[0][1])
+  self.assertEqual(widget.text(),'4 m')
+
+ def test_readonly_parameters_are_visible_but_disabled(self):
+  self.window.discovery={'parameters':{},'allParameters':{'/avatar/parameters/Velocity':{'kind':'float','writable':False}}}
+  d=desktop.MappingDialog(self.window)
+  index=d.target.findData('/avatar/parameters/Velocity')
+  self.assertGreater(index,0)
+  self.assertFalse(d.target.model().item(index).isEnabled())
+ def test_preview_follows_values_and_disabled_state(self):
+  self.window.refresh_cards()
+  item,widget=self.window._output_labels[0]
+  self.assertEqual(widget.text(),'3')
+  self.window.sources[0]['value']=4
+  self.window.refresh_cards()
+  self.assertEqual(widget.text(),'4')
+  self.window.enable_mapping(0,False)
+  self.assertEqual(self.window._output_labels[0][1].text(),'Paused')
