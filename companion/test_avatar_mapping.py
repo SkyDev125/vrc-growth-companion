@@ -16,6 +16,19 @@ class MappingTests(unittest.TestCase):
     def item(self, **changes):
         return dict(source='tail',target='/avatar/parameters/Tail',kind='float',mode='range',inputMin=0,inputMax=200,outputMin=0,outputMax=1,**changes)
 
+    def test_eye_height_preset_and_legacy_migration(self):
+        config={'syncHeight':False,'profiles':{'avtr_a':[]}}
+        m.migrate_profiles(config)
+        item=config['profiles']['avtr_a'][0]
+        self.assertFalse(item['enabled'])
+        self.assertEqual(item['target'],'/avatar/eyeheight')
+        m.migrate_profiles(config)
+        self.assertEqual(len(config['profiles']['avtr_a']),1)
+        self.assertTrue(m.can_send(item,{'height':{}},None))
+        self.assertEqual(m.mapped_value(m.eye_height_preset(),{'value':20000}),10000)
+        self.assertEqual(m.mapped_value(m.eye_height_preset(),{'value':3}),3)
+        self.assertEqual(m.encode_parameter('/avatar/eyeheight','float',3),core.encode_eyeheight_packet(3))
+
     def test_range_clamps_and_can_reverse(self):
         item=self.item()
         for value,expected in [(-1,0),(100,.5),(201,1)]:

@@ -31,4 +31,4 @@ Choose a measurement and an avatar parameter, then Save mapping. OSCQuery lists 
 - **Range:** map a measurement range to an OSC range, clamped at both ends. For example, 0–200 cm → 0–1.
 - **Threshold:** turn a bool on at or above an amount.
 
-Linked measurements already include their website scaling. Display conversions do not change mapping units. Eye-height syncing has its own switch. The avatar must already have a suitable writable parameter and animator setup; OSC cannot add one. Discovery is optional and may be unavailable across devices.
+Linked measurements already include their website scaling. Display conversions do not change mapping units. Eye height is an ordinary mapping. Use + Eye height preset to add it; disable or remove its row to stop syncing. The status shows when OSCQuery responds, not an acknowledgement of UDP delivery. The avatar must already have a suitable writable parameter and animator setup; OSC cannot add one. Discovery is optional and may be unavailable across devices.

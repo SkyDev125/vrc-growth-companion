@@ -21,7 +21,7 @@ def parameter_address(value):
     address = str(value).strip()
     if not address.startswith('/'):
         address = PREFIX + address
-    if not address.startswith(PREFIX) or not address[len(PREFIX):] or len(address) > 256:
+    if address != '/avatar/eyeheight' and (not address.startswith(PREFIX) or not address[len(PREFIX):] or len(address) > 256):
         raise ValueError('Choose an avatar parameter, such as /avatar/parameters/TailSize.')
     if any(ord(c) < 32 or c in '*?[]{},' for c in address):
         raise ValueError('Use an exact OSC parameter address without wildcard characters.')
@@ -33,6 +33,8 @@ def validate_mapping(mapping):
     result['target'] = parameter_address(result.get('target', ''))
     if not result.get('source') or result.get('kind') not in ('float', 'int', 'bool'):
         raise ValueError('Choose a website measurement and OSC value type.')
+    if result['target'] == '/avatar/eyeheight' and (result['source'] != 'height' or result['kind'] != 'float'):
+        raise ValueError('Eye height uses Height in meters and the float type.')
     mode = result.get('mode', 'range')
     if mode not in ('value', 'ratio', 'range', 'threshold'):
         raise ValueError('Choose Value, Growth ratio, Map range, or Threshold.')
@@ -76,6 +78,8 @@ def mapped_value(mapping, source):
             raise ValueError('The mapped integer exceeds OSC’s 32-bit range.')
     elif abs(value) > 3.4028234e38:
         raise ValueError('The mapped float exceeds OSC’s 32-bit range.')
+    if mapping['target'] == '/avatar/eyeheight':
+        value = max(core.MIN_METERS, min(core.MAX_METERS, value))
     return value
 
 
@@ -212,6 +216,8 @@ def fetch_measurements(config):
 def can_send(item, sources, discovery):
     if item.get('source') not in sources:
         return False
+    if item.get('target') == '/avatar/eyeheight':
+        return True
     if discovery is not None:
         return discovery.get('parameters',{}).get(item.get('target')) == item.get('kind')
     return True
@@ -219,3 +225,18 @@ def can_send(item, sources, discovery):
 
 def profile_key(discovery):
     return (discovery or {}).get('avatar') or 'manual'
+
+
+def eye_height_preset(enabled=True):
+    return {'source':'height','target':'/avatar/eyeheight','kind':'float','mode':'value','enabled':enabled}
+
+
+def migrate_profiles(config):
+    if config.get('mappingVersion',0) >= 2: return
+    profiles=config.setdefault('profiles',{})
+    profiles.setdefault('manual',[])
+    for items in profiles.values():
+        if not any(item.get('target')=='/avatar/eyeheight' for item in items):
+            items.insert(0,eye_height_preset(config.get('syncHeight',True)))
+    config['mappingVersion']=2
+    config.pop('syncHeight',None)

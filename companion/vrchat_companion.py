@@ -93,6 +93,7 @@ def load_config(path: Path | None = None) -> dict:
               "oscQueryPort": query_port}
     config['profiles'] = data.get('profiles', {}) if isinstance(data.get('profiles'), dict) else {}
     config['syncHeight'] = data.get('syncHeight', True) is True
+    config['mappingVersion'] = data.get('mappingVersion', 0)
     if "token" in data or "metersPerUnit" in data:
         save_config(config, target)
     return config
@@ -126,6 +127,7 @@ def configure(path: Path | None = None, ask_server_url: bool = True) -> Path:
     }
     config['profiles'] = current.get('profiles', {}) if isinstance(current.get('profiles'), dict) else {}
     config['syncHeight'] = current.get('syncHeight', True) is True
+    config['mappingVersion'] = current.get('mappingVersion', 0)
     target = save_config(config, path)
     print(f"Saved companion settings to {target}")
     return target

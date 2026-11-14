@@ -31,8 +31,9 @@ class CompanionWindow:
         self.stop_event = threading.Event()
         self.worker = None
         root.title("Mid's Den Companion")
-        root.geometry('820x760')
-        root.minsize(700, 650)
+        root.geometry('980x800')
+        root.minsize(820, 720)
+        self.theme()
         frame = ttk.Frame(root, padding=24)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text="Mid's Den", font=('', 22, 'bold')).pack(anchor='w')
@@ -46,7 +47,7 @@ class CompanionWindow:
         self.sources = []
         self.discovery = None
         self.config.setdefault('profiles', {})
-        self.config.setdefault('syncHeight', True)
+        mapping.migrate_profiles(self.config)
         self.host = tk.StringVar(value=self.config['oscHost'])
         self.port = tk.StringVar(value=str(self.config['oscPort']))
         row = ttk.Frame(frame)
@@ -57,14 +58,15 @@ class CompanionWindow:
             ttk.Label(field, text=label).pack(anchor='w')
             ttk.Entry(field, textvariable=value).pack(fill='x', pady=5)
         self.status = tk.StringVar(value='Ready')
-        ttk.Label(frame, textvariable=self.status, wraplength=740).pack(anchor='w', pady=20)
+        ttk.Label(frame, textvariable=self.status, style='Status.TLabel', wraplength=880).pack(anchor='w', pady=(16,8))
         buttons = ttk.Frame(frame)
         buttons.pack(fill='x')
-        self.toggle = ttk.Button(buttons, text='Start', command=self.toggle_run)
+        self.toggle = ttk.Button(buttons, text='Resume', command=self.toggle_run)
         self.toggle.pack(side='left')
         if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
             ttk.Button(buttons, text='Install shortcut', command=self.install).pack(side='right')
-        ttk.Label(frame, text='Keep this window open and enable OSC in VRChat.\nUDP sending does not confirm receipt in the game.', wraplength=740).pack(anchor='w', pady=16)
+        self.connection = tk.StringVar(value='●  Looking for VRChat…')
+        ttk.Label(frame,textvariable=self.connection,style='Connection.TLabel').pack(anchor='w',pady=(12,4))
         self.build_mappings(frame)
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.drain)
@@ -87,19 +89,22 @@ class CompanionWindow:
         self.stop_event = threading.Event()
         self.worker = threading.Thread(target=self.sync, args=(self.stop_event,), daemon=True)
         self.worker.start()
-        self.toggle.configure(text='Stop')
+        self.toggle.configure(text='Pause')
 
     def build_mappings(self, frame):
-        self.sync_height = tk.BooleanVar(value=self.config['syncHeight'])
-        ttk.Checkbutton(frame, text='Sync eye height', variable=self.sync_height, command=self.save_height).pack(anchor='w')
+        toolbar=ttk.Frame(frame)
+        toolbar.pack(fill='x',pady=(14,10))
+        ttk.Label(toolbar,text='Your mappings',style='Title.TLabel').pack(side='left')
+        ttk.Button(toolbar,text='+ Eye height preset',command=self.add_eye_height).pack(side='right')
         self.profile_label = tk.StringVar(value='Manual / shared mappings')
         ttk.Label(frame, textvariable=self.profile_label, font=('', 12, 'bold')).pack(anchor='w', pady=(16, 6))
-        self.table = ttk.Treeview(frame, columns=('source','target','mode'), show='headings', height=5)
+        self.table = ttk.Treeview(frame, columns=('source','target','mode'), show='headings', height=5,selectmode='browse')
         for key, title, width in [('source','Measurement',180),('target','Avatar parameter',280),('mode','Mapping',120)]:
             self.table.heading(key, text=title)
             self.table.column(key, width=width)
         self.table.pack(fill='both', expand=True)
         self.table.bind('<<TreeviewSelect>>', self.edit_selected)
+        ttk.Separator(frame).pack(fill='x',pady=(16,4))
         editor = ttk.Frame(frame)
         editor.pack(fill='x', pady=10)
         self.source = tk.StringVar()
@@ -130,8 +135,8 @@ class CompanionWindow:
         ttk.Label(frame,textvariable=self.hint,wraplength=740).pack(anchor='w',pady=6)
         actions = ttk.Frame(frame)
         actions.pack(fill='x')
-        ttk.Button(actions,text='New',command=self.new_mapping).pack(side='left')
-        ttk.Button(actions,text='Save mapping',command=self.save_mapping).pack(side='left',padx=8)
+        ttk.Button(actions,text='+ New mapping',command=self.new_mapping).pack(side='left')
+        ttk.Button(actions,text='Save mapping',style='Accent.TButton',command=self.save_mapping).pack(side='left',padx=8)
         ttk.Button(actions,text='Remove',command=self.remove_mapping).pack(side='left')
         ttk.Checkbutton(actions,text='Enabled',variable=self.enabled).pack(side='right')
         self.update_fields()
@@ -141,9 +146,43 @@ class CompanionWindow:
         with self.lock:
             core.save_config(self.config, settings_path())
 
-    def save_height(self):
-        self.config['syncHeight'] = self.sync_height.get()
-        self.persist()
+    def theme(self):
+        bg, panel, text, muted, gold = '#101412','#1c231f','#eef1e8','#a9b5aa','#dfbf7b'
+        self.root.configure(bg=bg)
+        style=ttk.Style(self.root)
+        style.theme_use('clam')
+        style.configure('.',font=('Segoe UI',10),background=bg,foreground=text)
+        style.configure('TFrame',background=bg)
+        style.configure('TLabel',background=bg,foreground=muted)
+        style.configure('Title.TLabel',font=('Segoe UI',16,'bold'),foreground=text)
+        style.configure('Status.TLabel',foreground=muted)
+        style.configure('Connection.TLabel',foreground=gold,font=('Segoe UI',11,'bold'))
+        style.configure('TButton',background=panel,foreground=text,padding=(14,9),borderwidth=0)
+        style.map('TButton',background=[('active','#303b33')])
+        style.configure('Accent.TButton',background=gold,foreground='#151a16')
+        style.map('Accent.TButton',background=[('active','#efd49e')])
+        style.configure('TEntry',fieldbackground=panel,foreground=text,insertcolor=text,padding=8)
+        style.configure('TCombobox',fieldbackground=panel,background=panel,foreground=text,arrowsize=14,padding=7)
+        style.map('TCombobox',fieldbackground=[('readonly',panel)],foreground=[('readonly',text)],selectbackground=[('readonly',panel)],selectforeground=[('readonly',text)])
+        style.configure('Treeview',background=panel,fieldbackground=panel,foreground=text,rowheight=42,borderwidth=0)
+        style.configure('Treeview.Heading',background=bg,foreground=muted,padding=(12,10),relief='flat')
+        style.map('Treeview',background=[('selected','#354637')],foreground=[('selected',text)])
+        style.configure('TCheckbutton',background=bg,foreground=text,padding=6)
+        self.root.option_add('*TCombobox*Listbox.background',panel)
+        self.root.option_add('*TCombobox*Listbox.foreground',text)
+        self.root.option_add('*TCombobox*Listbox.selectBackground','#354637')
+
+    def add_eye_height(self):
+        items=copy.deepcopy(self.config['profiles'].get(self.profile,[]))
+        existing=next((i for i,item in enumerate(items) if item['target']=='/avatar/eyeheight'),None)
+        if existing is None:
+            items.append(mapping.eye_height_preset())
+            with self.lock: self.config['profiles'][self.profile]=items
+            self.persist()
+            self.refresh_table()
+            existing=len(items)-1
+        self.table.selection_set(str(existing))
+        self.edit_selected()
 
     def choose_target(self, _event=None):
         kind = (self.discovery or {}).get('parameters',{}).get(self.target.get())
@@ -175,7 +214,7 @@ class CompanionWindow:
         self.table.delete(*self.table.get_children())
         names = {s['id']:s['name'] for s in self.sources}
         for index,item in enumerate(self.config['profiles'].get(self.profile,[])):
-            self.table.insert('', 'end', iid=str(index), values=(names.get(item['source'],item['source']),item['target'].removeprefix(mapping.PREFIX),item['mode'] if item.get('enabled',True) else 'Disabled'))
+            self.table.insert('', 'end', iid=str(index), values=(names.get(item['source'],item['source']),('Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX)),item['mode'] if item.get('enabled',True) else 'Disabled'))
 
     def new_mapping(self):
         self.table.selection_remove(*self.table.selection())
@@ -230,18 +269,19 @@ class CompanionWindow:
         while not stop.is_set():
             with self.lock: config = copy.deepcopy(self.config)
             try:
-                # Eye height never waits for OSCQuery discovery.
-                if config.get('syncHeight',True):
-                    height = core.fetch_current_height(config)
-                    if height is not None and not stop.is_set():
-                        core.send_eyeheight(height,config['oscPort'],config['oscHost'])
-                sources = mapping.fetch_measurements(config)
                 browse = time.monotonic()-last_browse>30
                 discovery = mapping.discover(config,known_port,browse=browse)
                 if browse: last_browse=time.monotonic()
                 if discovery: known_port=discovery['queryPort']
-                self.events.put(('data',sources,discovery))
                 profile = mapping.profile_key(discovery)
+                with self.lock:
+                    if profile not in self.config['profiles']:
+                        self.config['profiles'][profile]=[mapping.eye_height_preset()]
+                        core.save_config(self.config,settings_path())
+                    config=copy.deepcopy(self.config)
+                self.events.put(('connection',bool(discovery)))
+                sources = mapping.fetch_measurements(config)
+                self.events.put(('data',sources,discovery))
                 sent, skipped = 0, 0
                 source_map = {s['id']:s for s in sources}
                 for item in config.get('profiles',{}).get(profile,[]):
@@ -262,8 +302,9 @@ class CompanionWindow:
     def toggle_run(self):
         if self.worker and self.worker.is_alive() and not self.stop_event.is_set():
             self.stop_event.set()
-            self.toggle.configure(text='Start')
-            self.status.set('Stopped')
+            self.toggle.configure(text='Resume')
+            self.status.set('Paused')
+            self.connection.set('○  Paused')
         else:
             self.start()
 
@@ -271,7 +312,9 @@ class CompanionWindow:
         while not self.events.empty():
             value = self.events.get_nowait()
             if self.stop_event.is_set(): continue
-            if value[0]=='status': self.status.set(value[1])
+            if value[0]=='connection':
+                self.connection.set('●  VRChat detected · OSCQuery responding' if value[1] else '○  VRChat not detected · manual OSC available')
+            elif value[0]=='status': self.status.set(value[1])
             else:
                 previous_labels = [self.source_label(s) for s in self.sources]
                 self.sources,self.discovery = value[1:]
