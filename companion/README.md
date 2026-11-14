@@ -8,7 +8,7 @@ Download from the website: run the Windows setup EXE, drag the macOS app from it
 
 The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.1`, `9000`). It applies enabled mappings on startup, then sends only changed OSC values. Use Stop, edit settings, then Start to apply changes. Enable OSC in VRChat and keep the window open. “Sending” does not confirm receipt inside the game.
 
-Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt, bundled with the application. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
+Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt Quick/QML through PySide6, bundled with the application. It uses the website’s paw icon for the app and native installers. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
 
 The included runtime is CPython 3.13.18 from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110). Its original license and notices are included with each runtime.
 
@@ -33,4 +33,4 @@ Choose a measurement and an avatar parameter, then Save mapping. OSCQuery lists 
 
 Linked measurements already include their website scaling. Display conversions do not change mapping units. Eye height is an ordinary mapping. Use + Eye height preset to add it; disable or remove its row to stop syncing. The status shows when OSCQuery responds, not an acknowledgement of UDP delivery. The avatar must already have a suitable writable parameter and animator setup; OSC cannot add one. Discovery is optional and may be unavailable across devices.
 
-The parameter field supports case-insensitive substring search. **All ▾** browses the complete discovered list; read-only or unsupported parameters are visible but disabled. Mapping rows show calculated OSC outputs; these previews do not confirm UDP delivery.
+The parameter field supports case-insensitive substring search. The field’s dropdown arrow browses the complete discovered list; read-only or unsupported parameters are visible but disabled. Mapping rows show calculated OSC outputs; these previews do not confirm UDP delivery.

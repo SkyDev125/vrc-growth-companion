@@ -8,6 +8,7 @@ on:
       - companion/measurement-examples.json
       - .github/workflows/companion-desktop.yml
       - companion/avatar_mapping.py
+      - companion/ui/**
       - companion/desktop.py
       - companion/vrchat_companion.py
       - companion/build-desktop.py

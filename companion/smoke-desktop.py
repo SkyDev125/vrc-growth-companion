@@ -1,4 +1,4 @@
-"""Execute the frozen desktop app and check that its native Tk/SSL/OSC imports work."""
+"""Execute the frozen desktop app and check that its Qt Quick interface and SSL/OSC imports work."""
 import json
 import os
 from pathlib import Path
