@@ -210,6 +210,10 @@ def vrchat_osc_ready(host: str = DEFAULT_OSC_HOST, query_port: int = 9001) -> bo
 
 
 def run(config: dict, once: bool = False) -> int:
+    import avatar_mapping as mappings
+    sender = mappings.ChangedSender()
+    previous_discovery = False
+    reconnect = 0
     last_state = None
     last_height = None
     while True:
@@ -220,9 +224,11 @@ def run(config: dict, once: bool = False) -> int:
                     print("Set a starting height in Mid's Den to begin.")
                 last_state = "height-unconfigured"
             else:
-                # UDP has no connection handshake. Repeat sends so starting VRChat
-                # later or changing avatars does not require restarting the companion.
-                send_eyeheight(meters, config["oscPort"], config["oscHost"])
+                discovery = None if once else mappings.discover(config, browse=False)
+                if discovery and not previous_discovery: reconnect += 1
+                previous_discovery = bool(discovery)
+                sender.begin((config['oscHost'], config['oscPort'], mappings.profile_key(discovery), reconnect))
+                sender.send(config, mappings.eye_height_preset(), {'value': meters})
                 if last_state != "sending" or last_height != meters:
                     print(f"Sending height: {format_measurement(meters, 'm')} to {config['oscHost']}:{config['oscPort']} (OSC UDP).")
                 last_height = meters

@@ -80,3 +80,18 @@ class DesktopTests(unittest.TestCase):
   self.assertEqual(widget.text(),'4')
   self.window.enable_mapping(0,False)
   self.assertEqual(self.window._output_labels[0][1].text(),'Paused')
+
+ def test_worker_sends_changes_avatar_switch_and_reconnect_only(self):
+  import copy,threading
+  import avatar_mapping as m
+  a={'avatar':'avtr_a','queryPort':9001,'parameters':{}}
+  b={'avatar':'avtr_b','queryPort':9001,'parameters':{}}
+  states=[(a,3),(a,3),(a,4),(b,4),(b,4),(None,4),(b,4),(b,4)]
+  position=[0];stop=threading.Event();writes=[]
+  def wait(_):
+   position[0]+=1
+   if position[0]>=len(states):stop.set()
+  def sources(_):return [{'id':'height','name':'Height','value':states[position[0]][1],'originalValue':2,'unit':'m'}]
+  with patch.object(stop,'wait',side_effect=wait),patch.object(m,'discover',side_effect=lambda *_a,**_k:copy.deepcopy(states[position[0]][0])),patch.object(m,'fetch_measurements',side_effect=sources),patch.object(m,'send_mapping',side_effect=lambda c,i,s:writes.append(s['value'])):
+   self.window.sync(stop)
+  self.assertEqual(writes,[3,4,4,4])

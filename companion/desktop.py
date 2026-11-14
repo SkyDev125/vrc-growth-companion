@@ -224,20 +224,20 @@ class CompanionWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Mid’s Den · Companion');self.resize(860,430);self.setMinimumSize(760,360)
         self.events=queue.Queue();self.lock=threading.Lock();self.stop_event=threading.Event();self.worker=None
-        self.sources=[];self.discovery=None;self.profile='manual';self.dialog=None
+        self.sources=[];self.discovery=None;self.profile='manual';self.dialog=None;self.resend_generation=0
         try:self.config=core.load_config(settings_path())
         except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
         mapping.migrate_profiles(self.config)
         body=QWidget();self.setCentralWidget(body);outer=QVBoxLayout(body);outer.setContentsMargins(20,16,20,14);outer.setSpacing(12)
         header=QHBoxLayout();brand=QVBoxLayout();brand.addWidget(label('Mid’s Den · Companion','brand'));header.addLayout(brand);header.addStretch()
-        header.addWidget(button('Connection settings',self.settings,'subtle'));self.pause=button('Pause',self.toggle_run);header.addWidget(self.pause);outer.addLayout(header)
+        header.addWidget(button('Resend',self.resend,'subtle'));header.addWidget(button('Connection settings',self.settings,'subtle'));self.pause=button('Pause',self.toggle_run);header.addWidget(self.pause);outer.addLayout(header)
         status=QFrame();status.setObjectName('status');sl=QHBoxLayout(status);sl.setContentsMargins(12,10,12,10)
         connection=QHBoxLayout();connection.setSpacing(16);self.connection=label('●  Looking for VRChat');self.connection.setStyleSheet('font-weight:600;color:#9cceba');connection.addWidget(self.connection)
         self.profile_label=label('Enable OSC in VRChat','muted');connection.addWidget(self.profile_label);sl.addLayout(connection);sl.addStretch()
         self.measure_count=label('0 measurements','muted');sl.addWidget(self.measure_count);outer.addWidget(status)
         tools=QHBoxLayout();tools.addWidget(label('YOUR MAPPINGS','eyebrow'));tools.addStretch();tools.addWidget(button('+ Eye height',self.add_eye_height));tools.addWidget(button('+ New mapping',self.new_mapping,'primary'));outer.addLayout(tools)
         scroll=QScrollArea();scroll.setWidgetResizable(True);self.cards=QWidget();self.card_layout=QVBoxLayout(self.cards);self.card_layout.setContentsMargins(0,0,8,0);self.card_layout.setSpacing(6);self.card_layout.setAlignment(Qt.AlignmentFlag.AlignTop);scroll.setWidget(self.cards);outer.addWidget(scroll,1)
-        footer=QHBoxLayout();self.status=label('Ready','muted');footer.addWidget(self.status);footer.addStretch();footer.addWidget(label('Updates every 5 seconds','muted'));outer.addLayout(footer)
+        footer=QHBoxLayout();self.status=label('Ready','muted');footer.addWidget(self.status);footer.addStretch();footer.addWidget(label('Checks every 5s · sends changes only','muted'));outer.addLayout(footer)
         self.refresh_cards();self.timer=QTimer(self);self.timer.timeout.connect(self.drain);self.timer.start(100)
         if auto_start:self.start()
 
@@ -324,6 +324,10 @@ class CompanionWindow(QMainWindow):
             except (ValueError,OSError) as error:error_label.setText(str(error))
         layout.addWidget(button('Save connection',save,'primary'));dialog.exec()
 
+    def resend(self):
+        with self.lock:self.resend_generation+=1
+        self.status.setText('Resend requested · next check')
+
     def start(self):
         if self.worker and self.worker.is_alive():QTimer.singleShot(150,self.start);return
         self.persist();self.stop_event=threading.Event();self.worker=threading.Thread(target=self.sync,args=(self.stop_event,),daemon=True);self.worker.start();self.pause.setText('Pause')
@@ -354,6 +358,12 @@ class CompanionWindow(QMainWindow):
     def sync(self, stop):
         last_browse = 0
         known_port = None
+        sender=mapping.ChangedSender()
+        was_detected=False
+        ever_detected=False
+        reconnect=0
+        last_generation=0
+        last_profile='manual'
         while not stop.is_set():
             with self.lock: config = copy.deepcopy(self.config)
             try:
@@ -361,28 +371,42 @@ class CompanionWindow(QMainWindow):
                 discovery = mapping.discover(config,known_port,browse=browse)
                 if browse: last_browse=time.monotonic()
                 if discovery: known_port=discovery['queryPort']
-                profile = mapping.profile_key(discovery)
+                if discovery and not was_detected:reconnect+=1
+                was_detected=bool(discovery)
+                self.events.put(('connection',bool(discovery)))
+                with self.lock:requested_generation=self.resend_generation
+                if not discovery and ever_detected and requested_generation==last_generation:
+                    self.events.put(('status','VRChat discovery lost · waiting to reconnect'))
+                    stop.wait(core.DEFAULT_POLL_SECONDS)
+                    continue
+                ever_detected=ever_detected or bool(discovery)
+                profile = last_profile if not discovery and ever_detected else mapping.profile_key(discovery)
+                last_profile=profile
                 with self.lock:
                     if profile not in self.config['profiles']:
                         self.config['profiles'][profile]=[mapping.eye_height_preset()]
                         core.save_config(self.config,settings_path())
                     config=copy.deepcopy(self.config)
-                self.events.put(('connection',bool(discovery)))
+                    generation=self.resend_generation
+                sender.begin((config['oscHost'],config['oscPort'],profile,known_port,reconnect,generation))
                 sources = mapping.fetch_measurements(config)
                 self.events.put(('data',sources,discovery))
-                sent, skipped = 0, 0
+                sent, skipped, active = 0, 0, 0
                 source_map = {s['id']:s for s in sources}
-                for item in config.get('profiles',{}).get(profile,[]):
+                items=config.get('profiles',{}).get(profile,[])
+                sender.prune({item['target'] for item in items if item.get('enabled',True) and mapping.can_send(item,source_map,discovery)})
+                for item in items:
                     if stop.is_set(): break
                     if not item.get('enabled',True): continue
                     if not mapping.can_send(item,source_map,discovery):
                         skipped+=1
                         continue
                     try:
-                        mapping.send_mapping(config,item,source_map[item['source']])
-                        sent+=1
+                        if sender.send(config,item,source_map[item['source']]):sent+=1
+                        active+=1
                     except (OSError,ValueError,KeyError,TypeError,OverflowError): skipped+=1
-                self.events.put(('status',f"Syncing · {sent} active mapping{'s' if sent != 1 else ''}"+(f' · {skipped} unavailable' if skipped else '')))
+                last_generation=generation
+                self.events.put(('status',f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else '')))
             except (OSError,ValueError,RuntimeError) as error:
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)

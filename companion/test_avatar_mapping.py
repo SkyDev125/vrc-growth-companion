@@ -128,3 +128,33 @@ class MappingTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+
+class ChangedSenderTests(unittest.TestCase):
+    def test_same_wire_value_is_sent_once_and_changed_value_is_sent(self):
+        sender=m.ChangedSender();sender.begin(('avatar-a',9000))
+        item=m.eye_height_preset();config={'oscHost':'127.0.0.1','oscPort':9000}
+        with patch.object(m,'send_mapping') as send:
+            self.assertTrue(sender.send(config,item,{'value':3}))
+            for value in [3,3,3+1e-10]:self.assertFalse(sender.send(config,item,{'value':value}))
+            self.assertTrue(sender.send(config,item,{'value':4}))
+            self.assertEqual(send.call_count,2)
+            sender.begin(('avatar-b',9000))
+            self.assertTrue(sender.send(config,item,{'value':4}))
+            sender.prune(set())
+            self.assertTrue(sender.send(config,item,{'value':4}))
+    def test_failed_udp_write_is_retried(self):
+        sender=m.ChangedSender();sender.begin('avatar-a')
+        with patch.object(m,'send_mapping',side_effect=[OSError('unavailable'),None]) as send:
+            with self.assertRaises(OSError):sender.send({'oscHost':'127.0.0.1','oscPort':9000},m.eye_height_preset(),{'value':3})
+            self.assertTrue(sender.send({'oscHost':'127.0.0.1','oscPort':9000},m.eye_height_preset(),{'value':3}))
+            self.assertEqual(send.call_count,2)
+    def test_udp_receiver_gets_no_repeated_unchanged_datagrams(self):
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
+            receiver.bind(('127.0.0.1',0));receiver.settimeout(.1)
+            config={'oscHost':'127.0.0.1','oscPort':receiver.getsockname()[1]}
+            sender=m.ChangedSender();sender.begin('avatar-a')
+            for value in [3,3,3,4,4]:sender.send(config,m.eye_height_preset(),{'value':value})
+            self.assertEqual(receiver.recvfrom(4096)[0],core.encode_eyeheight_packet(3))
+            self.assertEqual(receiver.recvfrom(4096)[0],core.encode_eyeheight_packet(4))
+            with self.assertRaises(socket.timeout):receiver.recvfrom(4096)

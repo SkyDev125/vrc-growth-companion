@@ -240,3 +240,26 @@ def migrate_profiles(config):
             items.insert(0,eye_height_preset(config.get('syncHeight',True)))
     config['mappingVersion']=2
     config.pop('syncHeight',None)
+
+
+class ChangedSender:
+    """Deduplicate the encoded OSC value, only remembering successful UDP writes."""
+    def __init__(self):
+        self.context=None
+        self.packets={}
+
+    def begin(self,context):
+        if context != self.context:
+            self.context=context
+            self.packets.clear()
+
+    def prune(self,targets):
+        self.packets={k:v for k,v in self.packets.items() if k in targets}
+
+    def send(self,config,item,source):
+        value=mapped_value(item,source)
+        packet=encode_parameter(item['target'],item['kind'],value)
+        if self.packets.get(item['target'])==packet:return False
+        send_mapping(config,item,source)
+        self.packets[item['target']]=packet
+        return True

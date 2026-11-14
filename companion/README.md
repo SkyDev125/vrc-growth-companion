@@ -6,7 +6,7 @@ Syncs Mid’s Den measurements to VRChat’s eye height and avatar parameters ov
 
 Download from the website: run the Windows setup EXE, drag the macOS app from its DMG into Applications, or mark the Linux x64 executable as executable and open it. No Python installation or manual archive extraction is needed.
 
-The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.1`, `9000`). It starts sending automatically. Use Stop, edit settings, then Start to apply changes. Enable OSC in VRChat and keep the window open. “Sending” does not confirm receipt inside the game.
+The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.1`, `9000`). It applies enabled mappings on startup, then sends only changed OSC values. Use Stop, edit settings, then Start to apply changes. Enable OSC in VRChat and keep the window open. “Sending” does not confirm receipt inside the game.
 
 Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt, bundled with the application. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
 
@@ -20,7 +20,7 @@ OSC accepts eye heights from `0.01m` to `10,000m`. Only `0.1m`–`100m` is offic
 
 With OSC enabled, start the launcher with `--test-osc 2` to send a 2m test value without contacting Mid's Den. If VRChat runs on another computer, also pass `--osc-host 192.168.1.42` with its private IP. Adjust your avatar back afterward if desired.
 
-Height is sent again every five seconds, so you can start VRChat before or after the companion. OSCQuery is not required. UDP sending does not confirm receipt inside the game. Existing settings keep their port; use `--configure` to change it.
+The website is checked every five seconds. Unchanged values are not resent. Avatar switches and detected reconnections apply mappings once again; use Resend for a deliberate retry when discovery is unavailable. OSCQuery is not required. UDP sending does not confirm receipt inside the game. Existing settings keep their port; use `--configure` to change it.
 
 ## Avatar mappings
 
