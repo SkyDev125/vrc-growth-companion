@@ -52,7 +52,7 @@ class CompanionWindow:
         buttons.pack(fill='x')
         self.toggle = ttk.Button(buttons, text='Start', command=self.toggle_run)
         self.toggle.pack(side='left')
-        if getattr(sys, 'frozen', False) and sys.platform != 'darwin':
+        if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
             ttk.Button(buttons, text='Install shortcut', command=self.install).pack(side='right')
         ttk.Label(frame, text='Keep this window open and enable OSC in VRChat.\nUDP sending does not confirm receipt in the game.', wraplength=410).pack(anchor='w', pady=16)
         root.protocol('WM_DELETE_WINDOW', self.close)
