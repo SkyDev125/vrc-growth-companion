@@ -6,17 +6,17 @@ case "$family" in
   ubuntu)
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y --no-install-recommends xvfb ca-certificates fonts-dejavu-core
+    apt-get install -y --no-install-recommends xvfb ca-certificates fonts-dejavu-core libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
     ;;
   fedora)
-    dnf install -y xorg-x11-server-Xvfb ca-certificates dejavu-sans-fonts
+    dnf install -y xorg-x11-server-Xvfb ca-certificates dejavu-sans-fonts mesa-libEGL libglvnd-opengl libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
     ;;
   arch)
-    pacman -Syu --noconfirm xorg-server-xvfb ca-certificates ttf-dejavu
+    pacman -Syu --noconfirm xorg-server-xvfb ca-certificates ttf-dejavu libglvnd libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
     ;;
   opensuse)
     zypper --non-interactive refresh
-    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts
+    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts libEGL1 libOpenGL0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
     ;;
   *) echo "Unknown family: $family" >&2; exit 2 ;;
 esac

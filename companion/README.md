@@ -8,7 +8,7 @@ Download from the website: run the Windows setup EXE, drag the macOS app from it
 
 The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.1`, `9000`). It starts sending automatically. Use Stop, edit settings, then Start to apply changes. Enable OSC in VRChat and keep the window open. “Sending” does not confirm receipt inside the game.
 
-Settings are stored in your user application settings directory and survive app upgrades. Linux offers an Install shortcut button. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
+Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt, bundled with the application. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
 
 The included runtime is CPython 3.13.18 from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110). Its original license and notices are included with each runtime.
 

@@ -1,308 +1,266 @@
-"""Native desktop interface; all network work runs outside Tk's UI thread."""
+"""Qt desktop companion. Network polling stays off the GUI thread."""
 import copy
-import time
 import json
 import os
 from pathlib import Path
 import queue
 import shutil
-import subprocess
 import sys
 import threading
-import tkinter as tk
-from tkinter import ttk, messagebox
+import time
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QScrollArea,QDialog,QComboBox,QLineEdit,QCheckBox,QDialogButtonBox,QMessageBox)
 import vrchat_companion as core
 import avatar_mapping as mapping
 from measurement_format import format_measurement
 
+STYLE = """
+QWidget { background:#111416; color:#ecefee; font-family: 'Segoe UI', 'Inter', sans-serif; font-size:14px; }
+QLabel { background:transparent; }
+QLabel#brand { font-size:25px; font-weight:700; }
+QLabel#heading { font-size:30px; font-weight:700; }
+QLabel#muted { color:#99a4a4; }
+QLabel#eyebrow { color:#c8b58c; font-size:11px; font-weight:700; }
+QFrame#card { background:#1b2023; border:1px solid #2c3438; border-radius:18px; }
+QFrame#status { background:#182523; border:1px solid #2b4540; border-radius:16px; }
+QPushButton { background:#252d31; border:1px solid #364044; border-radius:10px; padding:10px 16px; font-weight:600; }
+QPushButton:hover { background:#354045; border-color:#526268; }
+QPushButton:pressed { background:#182023; }
+QPushButton#primary { background:#dfc48d; border-color:#dfc48d; color:#201d17; }
+QPushButton#primary:hover { background:#f0d8a8; }
+QPushButton#subtle { background:transparent; border:0; color:#aeb9b9; }
+QPushButton#danger { color:#f6a69c; }
+QLineEdit,QComboBox { background:#222a2e; border:1px solid #3b474d; border-radius:10px; padding:11px; selection-background-color:#566c69; }
+QLineEdit:focus,QComboBox:focus { border:1px solid #dfc48d; }
+QComboBox::drop-down { border:0; width:28px; }
+QComboBox QAbstractItemView { background:#222a2e; color:#ecefee; selection-background-color:#3c514d; padding:8px; }
+QCheckBox { spacing:10px; background:transparent; }
+QCheckBox::indicator { width:19px; height:19px; border:1px solid #53635f; border-radius:6px; background:#222a2e; }
+QCheckBox::indicator:checked { background:#dfc48d; border-color:#dfc48d; image:none; }
+QScrollArea { border:0; background:transparent; }
+QScrollBar:vertical { background:transparent; width:8px; }
+QScrollBar::handle:vertical { background:#3c494c; border-radius:4px; min-height:30px; }
+QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical { height:0; }
+"""
+
 
 def settings_path():
-    if sys.platform == 'win32':
-        return Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'MidsDenCompanion/config.json'
-    if sys.platform == 'darwin':
-        return Path.home() / 'Library/Application Support/MidsDenCompanion/config.json'
-    return Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'mids-den-companion/config.json'
+    if sys.platform=='win32': return Path(os.environ.get('LOCALAPPDATA',Path.home()/'AppData/Local'))/'MidsDenCompanion/config.json'
+    if sys.platform=='darwin': return Path.home()/'Library/Application Support/MidsDenCompanion/config.json'
+    return Path(os.environ.get('XDG_CONFIG_HOME',Path.home()/'.config'))/'mids-den-companion/config.json'
 
 
-class CompanionWindow:
-    def __init__(self, root):
-        self.root = root
-        self.events = queue.Queue()
-        self.stop_event = threading.Event()
-        self.worker = None
-        root.title("Mid's Den Companion")
-        root.geometry('940x640')
-        root.minsize(800, 560)
-        self.theme()
-        frame = ttk.Frame(root, padding=24)
-        frame.pack(fill='both', expand=True)
-        ttk.Label(frame, text="Mid's Den", font=('', 22, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='VRChat companion').pack(anchor='w', pady=(0, 20))
-        try:
-            self.config = core.load_config(settings_path())
-        except (OSError, ValueError, json.JSONDecodeError):
-            self.config = {'serverUrl': core.DEFAULT_URL, 'oscHost': core.DEFAULT_OSC_HOST, 'oscPort': 9000, 'oscQueryPort': 9001}
-        self.lock = threading.Lock()
-        self.profile = 'manual'
-        self.sources = []
-        self.discovery = None
-        self.config.setdefault('profiles', {})
-        mapping.migrate_profiles(self.config)
-        self.host = tk.StringVar(value=self.config['oscHost'])
-        self.port = tk.StringVar(value=str(self.config['oscPort']))
-        self.settings_window=tk.Toplevel(root)
-        self.settings_window.title('Connection settings')
-        self.settings_window.geometry('480x230')
-        self.settings_window.configure(bg='#101412')
-        self.settings_window.withdraw()
-        self.settings_window.protocol('WM_DELETE_WINDOW',self.settings_window.withdraw)
-        settings=ttk.Frame(self.settings_window,padding=24)
-        settings.pack(fill='both',expand=True)
-        ttk.Label(settings,text='Connection settings',style='Title.TLabel').pack(anchor='w',pady=(0,18))
-        row = ttk.Frame(settings)
-        row.pack(fill='x')
-        for label, value in [('VRChat IP', self.host), ('OSC port', self.port)]:
-            field = ttk.Frame(row)
-            field.pack(side='left', fill='x', expand=True, padx=(0, 10))
-            ttk.Label(field, text=label).pack(anchor='w')
-            ttk.Entry(field, textvariable=value).pack(fill='x', pady=5)
-        ttk.Button(settings,text='Apply connection',style='Accent.TButton',command=self.apply_connection).pack(anchor='e',pady=16)
-        self.status = tk.StringVar(value='Ready')
-        ttk.Label(frame, textvariable=self.status, style='Status.TLabel', wraplength=880).pack(anchor='w', pady=(16,8))
-        buttons = ttk.Frame(frame)
-        buttons.pack(fill='x')
-        self.toggle = ttk.Button(buttons, text='Resume', command=self.toggle_run)
-        self.toggle.pack(side='left')
-        ttk.Button(buttons,text='Connection settings',command=self.settings_window.deiconify).pack(side='right')
-        if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
-            ttk.Button(buttons, text='Install shortcut', command=self.install).pack(side='right')
-        self.connection = tk.StringVar(value='●  Looking for VRChat…')
-        ttk.Label(frame,textvariable=self.connection,style='Connection.TLabel').pack(anchor='w',pady=(12,4))
-        self.build_mappings(frame)
-        root.protocol('WM_DELETE_WINDOW', self.close)
-        root.after(100, self.drain)
-        self.start()
+def label(text,role=None):
+    widget=QLabel(text)
+    if role: widget.setObjectName(role)
+    return widget
 
-    def apply_connection(self):
-        if self.worker and self.worker.is_alive():
-            self.stop_event.set()
-            self.status.set('Applying connection…')
-            self.root.after(150,self.apply_connection)
-            return
-        self.start()
-        self.settings_window.withdraw()
 
-    def start(self):
-        if self.worker and self.worker.is_alive():
-            self.status.set('Stopping… please wait before restarting.')
-            return
-        try:
-            host = core.validate_osc_host(self.host.get())
-            port = int(self.port.get())
-            if not 1 <= port <= 65535:
-                raise ValueError('Port must be between 1 and 65535.')
-            self.config.update(oscHost=host, oscPort=port)
-            core.save_config(self.config, settings_path())
-        except (OSError, ValueError) as error:
-            messagebox.showerror('Settings', str(error))
-            return
-        self.stop_event = threading.Event()
-        self.worker = threading.Thread(target=self.sync, args=(self.stop_event,), daemon=True)
-        self.worker.start()
-        self.toggle.configure(text='Pause')
+def button(text,callback,role=None):
+    widget=QPushButton(text)
+    if role: widget.setObjectName(role)
+    widget.clicked.connect(callback)
+    return widget
 
-    def build_mappings(self, frame):
-        toolbar=ttk.Frame(frame)
-        toolbar.pack(fill='x',pady=(14,10))
-        ttk.Label(toolbar,text='Your mappings',style='Title.TLabel').pack(side='left')
-        ttk.Button(toolbar,text='+ Eye height preset',command=self.add_eye_height).pack(side='right')
-        self.profile_label = tk.StringVar(value='Manual / shared mappings')
-        ttk.Label(frame, textvariable=self.profile_label, font=('', 12, 'bold')).pack(anchor='w', pady=(16, 6))
-        self.table = ttk.Treeview(frame, columns=('source','target','mode'), show='headings', height=2,selectmode='browse')
-        for key, title, width in [('source','Measurement',180),('target','Avatar parameter',280),('mode','Mapping',120)]:
-            self.table.heading(key, text=title)
-            self.table.column(key, width=width)
-        self.table.pack(fill='both', expand=True)
-        self.table.bind('<Double-1>', self.edit_selected)
-        self.table.bind('<Return>',self.edit_selected)
-        tools=ttk.Frame(frame)
-        tools.pack(fill='x',pady=(16,0))
-        ttk.Button(tools,text='+ New mapping',style='Accent.TButton',command=self.new_mapping).pack(side='left')
-        ttk.Button(tools,text='Edit mapping',command=self.edit_selected).pack(side='left',padx=8)
-        ttk.Button(tools,text='Remove',command=self.remove_mapping).pack(side='right')
-        self.editor_window=tk.Toplevel(self.root)
-        self.editor_window.title('Avatar mapping')
-        self.editor_window.geometry('660x510')
-        self.editor_window.minsize(660,510)
-        self.editor_window.configure(bg='#101412')
-        self.editor_window.withdraw()
-        self.editor_window.protocol('WM_DELETE_WINDOW',self.editor_window.withdraw)
-        frame=ttk.Frame(self.editor_window,padding=28)
-        frame.pack(fill='both',expand=True)
-        ttk.Label(frame,text='Connect a measurement',style='Title.TLabel').pack(anchor='w',pady=(0,8))
-        ttk.Separator(frame).pack(fill='x',pady=(16,4))
-        editor = ttk.Frame(frame)
-        editor.pack(fill='x', pady=10)
-        self.source = tk.StringVar()
-        self.target = tk.StringVar()
-        self.kind = tk.StringVar(value='float')
-        self.mode = tk.StringVar(value='range')
-        self.enabled = tk.BooleanVar(value=True)
-        self.source_box = ttk.Combobox(editor, textvariable=self.source, state='readonly')
-        self.target_box = ttk.Combobox(editor, textvariable=self.target)
-        for col, (title, widget) in enumerate([('Measurement',self.source_box),('Avatar parameter',self.target_box)]):
-            ttk.Label(editor, text=title).grid(row=0,column=col,sticky='w')
-            widget.grid(row=1,column=col,sticky='ew',padx=(0,8))
-            editor.columnconfigure(col,weight=1)
-        self.target_box.bind('<<ComboboxSelected>>', self.choose_target)
-        self.source_box.bind('<<ComboboxSelected>>', self.update_fields)
-        types = ttk.Combobox(editor, textvariable=self.kind, values=['float','int','bool'], state='readonly',width=9)
-        modes = ttk.Combobox(editor, textvariable=self.mode, values=['value','ratio','range','threshold'], state='readonly',width=12)
-        ttk.Label(editor,text='Type').grid(row=2,column=0,sticky='w',pady=(8,0))
-        types.grid(row=3,column=0,sticky='w')
-        ttk.Label(editor,text='Mapping').grid(row=2,column=1,sticky='w',pady=(8,0))
-        modes.grid(row=3,column=1,sticky='w')
-        types.bind('<<ComboboxSelected>>',self.choose_kind)
-        modes.bind('<<ComboboxSelected>>',self.update_fields)
-        self.fields = ttk.Frame(frame)
-        self.fields.pack(fill='x')
-        self.numbers = {key:tk.StringVar(value=value) for key,value in [('inputMin','0'),('inputMax','10'),('outputMin','0'),('outputMax','1'),('threshold','1')]}
-        self.hint = tk.StringVar()
-        ttk.Label(frame,textvariable=self.hint,wraplength=740).pack(anchor='w',pady=6)
-        actions = ttk.Frame(frame)
-        actions.pack(fill='x')
-        ttk.Button(actions,text='Cancel',command=self.editor_window.withdraw).pack(side='left')
-        ttk.Button(actions,text='Save mapping',style='Accent.TButton',command=self.save_mapping).pack(side='left',padx=8)
 
-        ttk.Checkbutton(actions,text='Enabled',variable=self.enabled).pack(side='right')
+class MappingDialog(QDialog):
+    MODES={'Current value':'value','Growth ratio':'ratio','Map a range':'range','On / off threshold':'threshold'}
+    def __init__(self,owner,index=None,preset=None):
+        super().__init__(owner)
+        self.owner,self.index,self.profile=owner,index,owner.profile
+        self.setWindowTitle('Mapping · Mid’s Den')
+        self.setMinimumWidth(620)
+        self.setModal(True)
+        layout=QVBoxLayout(self);layout.setContentsMargins(30,28,30,28);layout.setSpacing(18)
+        layout.addWidget(label('MAKE A CONNECTION','eyebrow'))
+        layout.addWidget(label('Your measurement. Your avatar.','brand'))
+        grid=QGridLayout();grid.setSpacing(12)
+        self.source=QComboBox()
+        for source in owner.sources:self.source.addItem(f"{source['name']} · {source['unit']}",source['id'])
+        self.target=QComboBox();self.target.setEditable(True)
+        self.target.addItem('Eye height','/avatar/eyeheight')
+        for address in sorted((owner.discovery or {}).get('parameters',{})):
+            self.target.addItem(address.removeprefix(mapping.PREFIX),address)
+        self.target.setCurrentIndex(-1);self.target.lineEdit().setPlaceholderText('Search or enter a parameter')
+        self.kind=QComboBox();self.kind.addItems(['float','int','bool'])
+        self.mode=QComboBox();self.mode.addItems(list(self.MODES))
+        for col,title,widget in [(0,'Website measurement',self.source),(1,'Avatar parameter',self.target)]:
+            grid.addWidget(label(title,'muted'),0,col);grid.addWidget(widget,1,col)
+        grid.addWidget(label('Value type','muted'),2,0);grid.addWidget(self.kind,3,0)
+        grid.addWidget(label('Send as','muted'),2,1);grid.addWidget(self.mode,3,1)
+        layout.addLayout(grid)
+        self.range_box=QWidget();ranges=QGridLayout(self.range_box);ranges.setContentsMargins(0,0,0,0)
+        self.fields={}
+        for i,(key,title,value) in enumerate([('inputMin','Measurement from','0'),('inputMax','Measurement to','10'),('outputMin','Parameter from','0'),('outputMax','Parameter to','1'),('threshold','Turn on at','1')]):
+            field=QLineEdit(value);self.fields[key]=field
+            ranges.addWidget(label(title,'muted'),(i//2)*2,i%2);ranges.addWidget(field,(i//2)*2+1,i%2)
+        layout.addWidget(self.range_box)
+        self.hint=label('','muted');self.hint.setWordWrap(True);layout.addWidget(self.hint)
+        self.error=label('');self.error.setStyleSheet('color:#f6a69c');self.error.setWordWrap(True);layout.addWidget(self.error)
+        actions=QHBoxLayout();self.enabled=QCheckBox('Mapping enabled');self.enabled.setChecked(True);actions.addWidget(self.enabled);actions.addStretch()
+        actions.addWidget(button('Cancel',self.reject,'subtle'));actions.addWidget(button('Save mapping',self.save,'primary'));layout.addLayout(actions)
+        item=preset or (owner.config['profiles'][self.profile][index] if index is not None else None)
+        if item:
+            self.source.setCurrentIndex(self.source.findData(item['source']))
+            match=self.target.findData(item['target'])
+            if match>=0:self.target.setCurrentIndex(match)
+            else:self.target.setEditText(item['target'])
+            self.kind.setCurrentText(item['kind'])
+            self.mode.setCurrentText(next(k for k,v in self.MODES.items() if v==item['mode']))
+            self.enabled.setChecked(item.get('enabled',True))
+            for key,field in self.fields.items():field.setText(str(item.get(key,field.text())))
+        self.target.activated.connect(self.choose_target)
+        self.kind.currentTextChanged.connect(self.choose_kind)
+        self.mode.currentTextChanged.connect(self.update_fields)
+        self.source.currentIndexChanged.connect(self.update_fields)
         self.update_fields()
-        self.refresh_table()
 
-    def persist(self):
-        with self.lock:
-            core.save_config(self.config, settings_path())
-
-    def theme(self):
-        bg, panel, text, muted, gold = '#101412','#1c231f','#eef1e8','#a9b5aa','#dfbf7b'
-        self.root.configure(bg=bg)
-        style=ttk.Style(self.root)
-        style.theme_use('clam')
-        style.configure('.',font=('Segoe UI',10),background=bg,foreground=text)
-        style.configure('TFrame',background=bg)
-        style.configure('TLabel',background=bg,foreground=muted)
-        style.configure('Title.TLabel',font=('Segoe UI',16,'bold'),foreground=text)
-        style.configure('Status.TLabel',foreground=muted)
-        style.configure('Connection.TLabel',foreground=gold,font=('Segoe UI',11,'bold'))
-        style.configure('TButton',background=panel,foreground=text,padding=(14,9),borderwidth=0)
-        style.map('TButton',background=[('active','#303b33')])
-        style.configure('Accent.TButton',background=gold,foreground='#151a16')
-        style.map('Accent.TButton',background=[('active','#efd49e')])
-        style.configure('TEntry',fieldbackground=panel,foreground=text,insertcolor=text,padding=8)
-        style.configure('TCombobox',fieldbackground=panel,background=panel,foreground=text,arrowsize=14,padding=7)
-        style.map('TCombobox',fieldbackground=[('readonly',panel)],foreground=[('readonly',text)],selectbackground=[('readonly',panel)],selectforeground=[('readonly',text)])
-        style.configure('Treeview',background=panel,fieldbackground=panel,foreground=text,rowheight=42,borderwidth=0)
-        style.configure('Treeview.Heading',background=bg,foreground=muted,padding=(12,10),relief='flat')
-        style.map('Treeview',background=[('selected','#354637')],foreground=[('selected',text)])
-        style.configure('TCheckbutton',background=bg,foreground=text,padding=6)
-        self.root.option_add('*TCombobox*Listbox.background',panel)
-        self.root.option_add('*TCombobox*Listbox.foreground',text)
-        self.root.option_add('*TCombobox*Listbox.selectBackground','#354637')
-
-    def add_eye_height(self):
-        items=copy.deepcopy(self.config['profiles'].get(self.profile,[]))
-        existing=next((i for i,item in enumerate(items) if item['target']=='/avatar/eyeheight'),None)
-        if existing is None:
-            items.append(mapping.eye_height_preset())
-            with self.lock: self.config['profiles'][self.profile]=items
-            self.persist()
-            self.refresh_table()
-            existing=len(items)-1
-        self.table.selection_set(str(existing))
-        self.edit_selected()
-
-    def choose_target(self, _event=None):
-        kind = (self.discovery or {}).get('parameters',{}).get(self.target.get())
-        if kind: self.kind.set(kind)
+    def choose_target(self,*_):
+        address=self.target.currentData()
+        kind=(self.owner.discovery or {}).get('parameters',{}).get(address,'float')
+        self.kind.setCurrentText(kind)
+        if address=='/avatar/eyeheight':
+            self.source.setCurrentIndex(self.source.findData('height'))
+            self.mode.setCurrentText('Current value')
         self.choose_kind()
 
-    def choose_kind(self, _event=None):
-        if self.kind.get() == 'bool': self.mode.set('threshold')
-        elif self.mode.get() == 'threshold': self.mode.set('range')
+    def choose_kind(self,*_):
+        if self.kind.currentText()=='bool':self.mode.setCurrentText('On / off threshold')
+        elif self.mode.currentText()=='On / off threshold':self.mode.setCurrentText('Map a range')
         self.update_fields()
 
-    def update_fields(self, _event=None):
-        for child in self.fields.winfo_children(): child.destroy()
-        source = next((s for s in self.sources if self.source_label(s)==self.source.get()),{})
-        unit = source.get('unit','units')
-        mode = self.mode.get()
-        keys = [('inputMin',f'From ({unit})'),('inputMax',f'To ({unit})'),('outputMin','OSC from'),('outputMax','OSC to')] if mode=='range' else [('threshold',f'On at ({unit})')] if mode=='threshold' else []
-        for col,(key,label) in enumerate(keys):
-            ttk.Label(self.fields,text=label).grid(row=0,column=col,sticky='w')
-            ttk.Entry(self.fields,textvariable=self.numbers[key],width=14).grid(row=1,column=col,sticky='ew',padx=(0,8))
-            self.fields.columnconfigure(col,weight=1)
-        self.hint.set({'value':f'Sends the current value in {unit}.','ratio':'Current ÷ original; 1 means the starting size.','range':'Maps this measurement range to the OSC range, with limits.','threshold':'On at or above the threshold; off below it.'}[mode])
+    def update_fields(self,*_):
+        mode=self.MODES[self.mode.currentText()]
+        for index in range(self.range_box.layout().count()):
+            widget=self.range_box.layout().itemAt(index).widget()
+            row=self.range_box.layout().getItemPosition(index)[0]
+            widget.setVisible((mode=='range' and row<4) or (mode=='threshold' and row>=4))
+        self.range_box.setVisible(mode in ('range','threshold'))
+        source=next((s for s in self.owner.sources if s['id']==self.source.currentData()),{})
+        unit=source.get('unit','saved units')
+        self.hint.setText({'value':f'Sends the current amount in {unit}.','ratio':'Current ÷ starting amount. 1 means the original size.','range':f'Maps your range in {unit} to the avatar’s range, with limits.','threshold':f'Turns on at or above the amount in {unit}.'}[mode])
+        self.adjustSize()
 
-    @staticmethod
-    def source_label(source):
-        return f"{source['name']} ({source.get('unit','')})"
-
-    def refresh_table(self):
-        self.table.delete(*self.table.get_children())
-        names = {s['id']:s['name'] for s in self.sources}
-        for index,item in enumerate(self.config['profiles'].get(self.profile,[])):
-            self.table.insert('', 'end', iid=str(index), values=(names.get(item['source'],item['source']),('Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX)),item['mode'] if item.get('enabled',True) else 'Disabled'))
-
-    def new_mapping(self):
-        self.table.selection_remove(*self.table.selection())
-        self.target.set('')
-        self.enabled.set(True)
-        self.editor_window.deiconify()
-        self.editor_window.lift()
-
-    def edit_selected(self, _event=None):
-        selected = self.table.selection()
-        if not selected: return
-        items = self.config['profiles'].get(self.profile,[])
-        if int(selected[0]) >= len(items): return
-        self.editor_window.deiconify()
-        self.editor_window.lift()
-        item = items[int(selected[0])]
-        source = next((s for s in self.sources if s['id']==item['source']),None)
-        self.source.set(self.source_label(source) if source else '')
-        for key in ('target','kind','mode'): getattr(self,key).set(item[key])
-        self.enabled.set(item.get('enabled',True))
-        for key,var in self.numbers.items(): var.set(str(item.get(key,var.get())))
-        self.update_fields()
-
-    def save_mapping(self):
+    def save(self):
         try:
-            source = next((s for s in self.sources if self.source_label(s)==self.source.get()),None)
-            item = mapping.validate_mapping(dict(source=source['id'] if source else '',target=self.target.get(),kind=self.kind.get(),mode=self.mode.get(),enabled=self.enabled.get(),**{k:v.get() for k,v in self.numbers.items()}))
-            info = (self.discovery or {}).get('allParameters',{}).get(item['target'])
-            if info and (not info['writable'] or info['kind'] != item['kind']):
-                raise ValueError('This parameter is read-only or has a different type.')
-            items = copy.deepcopy(self.config['profiles'].get(self.profile,[]))
-            selected = self.table.selection()
-            index = int(selected[0]) if selected else len(items)
-            if any(i!=index and other['target']==item['target'] for i,other in enumerate(items)):
-                raise ValueError('This parameter already has a mapping.')
-            if index<len(items): items[index]=item
-            else: items.append(item)
-            with self.lock: self.config['profiles'][self.profile]=items
-            self.persist()
-            self.refresh_table()
-            self.editor_window.withdraw()
-        except (ValueError,OSError) as error: messagebox.showerror('Mapping',str(error))
+            if self.profile!=self.owner.profile:raise ValueError('Avatar changed. Open the mapping again.')
+            target=self.target.currentData() if self.target.currentIndex()>=0 and self.target.currentText()==self.target.itemText(self.target.currentIndex()) else self.target.currentText()
+            item=mapping.validate_mapping(dict(source=self.source.currentData(),target=target,kind=self.kind.currentText(),mode=self.MODES[self.mode.currentText()],enabled=self.enabled.isChecked(),**{k:f.text() for k,f in self.fields.items()}))
+            info=(self.owner.discovery or {}).get('allParameters',{}).get(item['target'])
+            if info and (not info['writable'] or info['kind']!=item['kind']):raise ValueError('Choose a writable parameter with the matching type.')
+            items=copy.deepcopy(self.owner.config['profiles'].get(self.profile,[]))
+            if any(i!=self.index and other['target']==item['target'] for i,other in enumerate(items)):raise ValueError('This parameter already has a mapping.')
+            if self.index is None:items.append(item)
+            else:items[self.index]=item
+            with self.owner.lock:self.owner.config['profiles'][self.profile]=items
+            self.owner.persist();self.owner.refresh_cards();self.accept()
+        except (ValueError,OSError) as error:self.error.setText(str(error))
 
-    def remove_mapping(self):
-        selected = self.table.selection()
-        if not selected: return
-        with self.lock:
-            items = list(self.config['profiles'].get(self.profile,[]))
-            del items[int(selected[0])]
-            self.config['profiles'][self.profile]=items
-        self.persist()
-        self.refresh_table()
+
+class CompanionWindow(QMainWindow):
+    def __init__(self,auto_start=True):
+        super().__init__()
+        self.setWindowTitle('Mid’s Den · Companion');self.resize(1000,720);self.setMinimumSize(820,580)
+        self.events=queue.Queue();self.lock=threading.Lock();self.stop_event=threading.Event();self.worker=None
+        self.sources=[];self.discovery=None;self.profile='manual';self.dialog=None
+        try:self.config=core.load_config(settings_path())
+        except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
+        mapping.migrate_profiles(self.config)
+        body=QWidget();self.setCentralWidget(body);outer=QVBoxLayout(body);outer.setContentsMargins(34,28,34,24);outer.setSpacing(24)
+        header=QHBoxLayout();brand=QVBoxLayout();brand.addWidget(label('MID’S DEN','eyebrow'));brand.addWidget(label('Companion','brand'));header.addLayout(brand);header.addStretch()
+        header.addWidget(button('Connection settings',self.settings,'subtle'));self.pause=button('Pause',self.toggle_run);header.addWidget(self.pause);outer.addLayout(header)
+        status=QFrame();status.setObjectName('status');sl=QHBoxLayout(status);sl.setContentsMargins(20,18,20,18)
+        connection=QVBoxLayout();self.connection=label('●  Looking for VRChat');self.connection.setStyleSheet('font-weight:600;color:#9cceba');connection.addWidget(self.connection)
+        self.profile_label=label('Enable OSC in VRChat to discover your avatar.','muted');connection.addWidget(self.profile_label);sl.addLayout(connection);sl.addStretch()
+        self.measure_count=label('0 measurements','muted');sl.addWidget(self.measure_count);outer.addWidget(status)
+        heading=QHBoxLayout();titles=QVBoxLayout();titles.addWidget(label('Bring your growth to life.','heading'));titles.addWidget(label('Connect measurements to your avatar.','muted'));heading.addLayout(titles);heading.addStretch();outer.addLayout(heading)
+        tools=QHBoxLayout();tools.addWidget(label('YOUR MAPPINGS','eyebrow'));tools.addStretch();tools.addWidget(button('+ Eye height',self.add_eye_height));tools.addWidget(button('+ New mapping',self.new_mapping,'primary'));outer.addLayout(tools)
+        scroll=QScrollArea();scroll.setWidgetResizable(True);self.cards=QWidget();self.card_layout=QVBoxLayout(self.cards);self.card_layout.setContentsMargins(0,0,8,0);self.card_layout.setSpacing(12);self.card_layout.setAlignment(Qt.AlignmentFlag.AlignTop);scroll.setWidget(self.cards);outer.addWidget(scroll,1)
+        footer=QHBoxLayout();self.status=label('Ready','muted');footer.addWidget(self.status);footer.addStretch();footer.addWidget(label('Updates every 5 seconds','muted'));outer.addLayout(footer)
+        self.refresh_cards();self.timer=QTimer(self);self.timer.timeout.connect(self.drain);self.timer.start(100)
+        if auto_start:self.start()
+
+    def persist(self):
+        with self.lock:core.save_config(self.config,settings_path())
+
+    def refresh_cards(self):
+        while self.card_layout.count():
+            item=self.card_layout.takeAt(0)
+            if item.widget():item.widget().deleteLater()
+        sources={s['id']:s for s in self.sources}
+        items=self.config['profiles'].get(self.profile,[])
+        if not items:
+            empty=QFrame();empty.setObjectName('card');layout=QVBoxLayout(empty);layout.setContentsMargins(28,30,28,30);layout.addWidget(label('Your next connection starts here.','brand'));layout.addWidget(label('Add a mapping, or start with the eye-height preset.','muted'));self.card_layout.addWidget(empty)
+        for index,item in enumerate(items):
+            card=QFrame();card.setObjectName('card');row=QHBoxLayout(card);row.setContentsMargins(20,18,20,18);row.setSpacing(18)
+            enabled=QCheckBox();enabled.setChecked(item.get('enabled',True));enabled.setToolTip('Enable mapping');enabled.toggled.connect(lambda checked,i=index:self.enable_mapping(i,checked));row.addWidget(enabled)
+            source=sources.get(item['source'],{});left=QVBoxLayout();left.addWidget(label(source.get('name','Height' if item['source']=='height' else item['source'])))
+            left.addWidget(label(format_measurement(source['value'],source['unit']) if source else 'Waiting for website','muted'));row.addLayout(left,1)
+            arrow=label('→');arrow.setStyleSheet('font-size:24px;color:#c8b58c');row.addWidget(arrow)
+            right=QVBoxLayout();target='Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX);name=label(target);name.setWordWrap(True);right.addWidget(name)
+            modes={'value':'Current value','ratio':'Growth ratio','range':'Mapped range','threshold':'On / off threshold'};right.addWidget(label(modes[item['mode']],'muted'));row.addLayout(right,2)
+            row.addWidget(button('Edit',lambda _=False,i=index:self.edit_mapping(i),'subtle'));row.addWidget(button('×',lambda _=False,i=index:self.remove_mapping(i),'subtle'));self.card_layout.addWidget(card)
+
+    def enable_mapping(self,index,checked):
+        try:
+            with self.lock:self.config['profiles'][self.profile][index]['enabled']=checked
+            self.persist()
+        except OSError as error:self.status.setText(str(error))
+
+    def new_mapping(self):self.open_editor()
+    def edit_mapping(self,index):self.open_editor(index)
+    def open_editor(self,index=None,preset=None):
+        if self.dialog:self.dialog.close()
+        self.dialog=MappingDialog(self,index,preset);self.dialog.show()
+    def add_eye_height(self):
+        items=self.config['profiles'].get(self.profile,[])
+        index=next((i for i,item in enumerate(items) if item['target']=='/avatar/eyeheight'),None)
+        self.open_editor(index,None if index is not None else mapping.eye_height_preset())
+    def remove_mapping(self,index):
+        with self.lock:self.config['profiles'][self.profile].pop(index)
+        self.persist();self.refresh_cards()
+
+    def settings(self):
+        dialog=QDialog(self);dialog.setWindowTitle('Connection settings');dialog.setMinimumWidth(440);layout=QVBoxLayout(dialog);layout.setContentsMargins(28,28,28,28);layout.setSpacing(14)
+        layout.addWidget(label('Connect to VRChat','brand'))
+        host=QLineEdit(self.config['oscHost']);port=QLineEdit(str(self.config['oscPort']))
+        for title,field in [('VRChat IP address',host),('OSC receive port',port)]:layout.addWidget(label(title,'muted'));layout.addWidget(field)
+        error_label=label('');layout.addWidget(error_label)
+        def save():
+            try:
+                address=core.validate_osc_host(host.text());number=int(port.text())
+                if not 1<=number<=65535:raise ValueError('Use a port between 1 and 65535.')
+                with self.lock:self.config.update(oscHost=address,oscPort=number)
+                self.persist();self.discovery=None;dialog.accept()
+            except (ValueError,OSError) as error:error_label.setText(str(error))
+        layout.addWidget(button('Save connection',save,'primary'));dialog.exec()
+
+    def start(self):
+        if self.worker and self.worker.is_alive():QTimer.singleShot(150,self.start);return
+        self.persist();self.stop_event=threading.Event();self.worker=threading.Thread(target=self.sync,args=(self.stop_event,),daemon=True);self.worker.start();self.pause.setText('Pause')
+
+    def toggle_run(self):
+        if self.worker and self.worker.is_alive() and not self.stop_event.is_set():
+            self.stop_event.set();self.pause.setText('Resume');self.connection.setText('Ⅱ  Paused');self.status.setText('Syncing paused')
+        else:self.start()
+
+    def drain(self):
+        while not self.events.empty():
+            value=self.events.get_nowait()
+            if self.stop_event.is_set():continue
+            if value[0]=='connection':
+                self.connection.setText('●  VRChat detected' if value[1] else '○  Waiting for VRChat')
+                self.connection.setToolTip('OSCQuery is responding. UDP delivery is not acknowledged.' if value[1] else 'Discovery unavailable. Manual OSC mappings can still send.')
+            elif value[0]=='status':self.status.setText(value[1])
+            else:
+                self.sources,self.discovery=value[1:];profile=mapping.profile_key(self.discovery)
+                if profile!=self.profile and self.dialog:self.dialog.close();self.dialog=None
+                self.profile=profile;self.profile_label.setText('Avatar · '+profile[-8:] if profile!='manual' else 'Shared mappings · avatar discovery unavailable')
+                self.measure_count.setText(f'{len(self.sources)} measurements');self.refresh_cards()
+
+    def closeEvent(self,event):
+        self.stop_event.set();self.timer.stop();event.accept()
 
     def sync(self, stop):
         last_browse = 0
@@ -340,92 +298,17 @@ class CompanionWindow:
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)
 
-    def toggle_run(self):
-        if self.worker and self.worker.is_alive() and not self.stop_event.is_set():
-            self.stop_event.set()
-            self.toggle.configure(text='Resume')
-            self.status.set('Paused')
-            self.connection.set('○  Paused')
-        else:
-            self.start()
-
-    def drain(self):
-        while not self.events.empty():
-            value = self.events.get_nowait()
-            if self.stop_event.is_set(): continue
-            if value[0]=='connection':
-                self.connection.set('●  VRChat detected · OSCQuery responding' if value[1] else '○  VRChat not detected · manual OSC available')
-            elif value[0]=='status': self.status.set(value[1])
-            else:
-                previous_labels = [self.source_label(s) for s in self.sources]
-                self.sources,self.discovery = value[1:]
-                profile = mapping.profile_key(self.discovery)
-                changed = profile != self.profile
-                self.profile = profile
-                self.profile_label.set('Avatar mappings · '+profile[-8:] if profile!='manual' else 'Manual / shared mappings · discovery unavailable' if not self.discovery else 'Manual / shared mappings · avatar ID unavailable')
-                self.source_box.configure(values=[self.source_label(s) for s in self.sources])
-                if not self.source.get() and self.sources: self.source.set(self.source_label(self.sources[0]))
-                self.target_box.configure(values=sorted((self.discovery or {}).get('parameters',{})))
-                if changed:
-                    self.table.selection_remove(*self.table.selection())
-                    self.target.set('')
-                    self.editor_window.withdraw()
-                    self.refresh_table()
-                elif not self.table.selection(): self.refresh_table()
-                if changed or previous_labels != [self.source_label(s) for s in self.sources]:
-                    self.update_fields()
-        self.root.after(100,self.drain)
-
-    def install(self):
-        try:
-            source = Path(sys.executable)
-            if sys.platform == 'win32':
-                target = settings_path().parent / 'MidsDenCompanion.exe'
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if source.resolve() != target.resolve():
-                    shutil.copy2(source, target)
-                # Paths pass through environment variables rather than shell interpolation.
-                env = dict(os.environ, MIDSDEN_INSTALL_TARGET=str(target))
-                script = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([IO.Path]::Combine([Environment]::GetFolderPath('Desktop'),'Mids Den Companion.lnk'));$s.TargetPath=$env:MIDSDEN_INSTALL_TARGET;$s.Save()"
-                subprocess.run(['powershell.exe', '-NoProfile', '-Command', script], env=env, check=True, creationflags=0x08000000)
-            else:
-                target = Path.home() / '.local/bin/mids-den-companion'
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if source.resolve() != target.resolve():
-                    shutil.copy2(source, target)
-                target.chmod(0o755)
-                shortcut = Path.home() / '.local/share/applications/mids-den-companion.desktop'
-                shortcut.parent.mkdir(parents=True, exist_ok=True)
-                shortcut.write_text(f'[Desktop Entry]\nType=Application\nName=Mid’s Den Companion\nExec="{target}"\nTerminal=false\nCategories=Game;\n')
-            messagebox.showinfo('Installed', 'The companion is installed and its shortcut is ready. Settings are saved automatically.')
-        except (OSError, subprocess.SubprocessError) as error:
-            messagebox.showerror('Installation', str(error))
-
-    def close(self):
-        self.stop_event.set()
-        self.root.destroy()
-
 
 def main():
+    app=QApplication(sys.argv);app.setStyle('Fusion');app.setStyleSheet(STYLE)
+    app.setApplicationName('Mid’s Den Companion')
     if '--self-test' in sys.argv:
-        import ssl
-        import zeroconf
-        assert mapping.mapped_value({'source':'height','target':'Test','kind':'float','mode':'ratio'}, {'value':4,'originalValue':2}) == 2
-        assert mapping.parse_tree({'FULL_PATH':'/avatar/parameters/Test','TYPE':'f','ACCESS':3})['parameters']
-        mapping.encode_parameter('Test','bool',True)
-        core.encode_eyeheight_packet(1000)
-        core.validate_osc_host('127.0.0.1')
-        ssl.create_default_context()
-        root = tk.Tk()
-        root.withdraw()
-        root.update()
-        root.destroy()
-        Path(os.environ['MIDSDEN_SMOKE_REPORT']).write_text(json.dumps({'status': 'ok', 'platform': sys.platform}), encoding='utf-8')
+        import ssl,zeroconf
+        ssl.create_default_context();core.encode_eyeheight_packet(1000)
+        window=CompanionWindow(auto_start=False);window.show();app.processEvents()
+        window.open_editor(preset=mapping.eye_height_preset());app.processEvents();window.dialog.close();window.close()
+        Path(os.environ['MIDSDEN_SMOKE_REPORT']).write_text(json.dumps({'status':'ok','platform':sys.platform}))
         return
-    root = tk.Tk()
-    CompanionWindow(root)
-    root.mainloop()
+    window=CompanionWindow();window.show();sys.exit(app.exec())
 
-
-if __name__ == '__main__':
-    main()
+if __name__=='__main__':main()
