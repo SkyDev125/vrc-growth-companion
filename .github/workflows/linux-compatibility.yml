@@ -6,10 +6,15 @@ on:
       - .github/workflows/linux-compatibility.yml
       - companion/linux-compatibility.sh
   workflow_dispatch:
+  workflow_run:
+    workflows: [Build desktop installers]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 jobs:
   compatibility:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Test ${{ matrix.family }}
     runs-on: ubuntu-22.04
     timeout-minutes: 20
@@ -31,8 +36,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          tag=$(gh release view --json tagName --jq .tagName)
+          if [ -n "$BUILD_SHA" ]; then
+            tag=$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.target_commitish == env.BUILD_SHA) | .tag_name' | head -n 1)
+            test -n "$tag"
+          else
+            tag=$(gh release view --json tagName --jq .tagName)
+          fi
           echo "Testing release $tag" | tee release-under-test.txt
           gh release download "$tag" --pattern mids-den-companion-linux-x64 --pattern SHA256SUMS.txt --dir compat-artifact
           cd compat-artifact
