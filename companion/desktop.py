@@ -31,8 +31,8 @@ class CompanionWindow:
         self.stop_event = threading.Event()
         self.worker = None
         root.title("Mid's Den Companion")
-        root.geometry('980x800')
-        root.minsize(820, 800)
+        root.geometry('940x640')
+        root.minsize(800, 560)
         self.theme()
         frame = ttk.Frame(root, padding=24)
         frame.pack(fill='both', expand=True)
@@ -50,19 +50,30 @@ class CompanionWindow:
         mapping.migrate_profiles(self.config)
         self.host = tk.StringVar(value=self.config['oscHost'])
         self.port = tk.StringVar(value=str(self.config['oscPort']))
-        row = ttk.Frame(frame)
+        self.settings_window=tk.Toplevel(root)
+        self.settings_window.title('Connection settings')
+        self.settings_window.geometry('480x230')
+        self.settings_window.configure(bg='#101412')
+        self.settings_window.withdraw()
+        self.settings_window.protocol('WM_DELETE_WINDOW',self.settings_window.withdraw)
+        settings=ttk.Frame(self.settings_window,padding=24)
+        settings.pack(fill='both',expand=True)
+        ttk.Label(settings,text='Connection settings',style='Title.TLabel').pack(anchor='w',pady=(0,18))
+        row = ttk.Frame(settings)
         row.pack(fill='x')
         for label, value in [('VRChat IP', self.host), ('OSC port', self.port)]:
             field = ttk.Frame(row)
             field.pack(side='left', fill='x', expand=True, padx=(0, 10))
             ttk.Label(field, text=label).pack(anchor='w')
             ttk.Entry(field, textvariable=value).pack(fill='x', pady=5)
+        ttk.Button(settings,text='Apply connection',style='Accent.TButton',command=self.apply_connection).pack(anchor='e',pady=16)
         self.status = tk.StringVar(value='Ready')
         ttk.Label(frame, textvariable=self.status, style='Status.TLabel', wraplength=880).pack(anchor='w', pady=(16,8))
         buttons = ttk.Frame(frame)
         buttons.pack(fill='x')
         self.toggle = ttk.Button(buttons, text='Resume', command=self.toggle_run)
         self.toggle.pack(side='left')
+        ttk.Button(buttons,text='Connection settings',command=self.settings_window.deiconify).pack(side='right')
         if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
             ttk.Button(buttons, text='Install shortcut', command=self.install).pack(side='right')
         self.connection = tk.StringVar(value='●  Looking for VRChat…')
@@ -71,6 +82,15 @@ class CompanionWindow:
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.drain)
         self.start()
+
+    def apply_connection(self):
+        if self.worker and self.worker.is_alive():
+            self.stop_event.set()
+            self.status.set('Applying connection…')
+            self.root.after(150,self.apply_connection)
+            return
+        self.start()
+        self.settings_window.withdraw()
 
     def start(self):
         if self.worker and self.worker.is_alive():
@@ -103,7 +123,23 @@ class CompanionWindow:
             self.table.heading(key, text=title)
             self.table.column(key, width=width)
         self.table.pack(fill='both', expand=True)
-        self.table.bind('<<TreeviewSelect>>', self.edit_selected)
+        self.table.bind('<Double-1>', self.edit_selected)
+        self.table.bind('<Return>',self.edit_selected)
+        tools=ttk.Frame(frame)
+        tools.pack(fill='x',pady=(16,0))
+        ttk.Button(tools,text='+ New mapping',style='Accent.TButton',command=self.new_mapping).pack(side='left')
+        ttk.Button(tools,text='Edit mapping',command=self.edit_selected).pack(side='left',padx=8)
+        ttk.Button(tools,text='Remove',command=self.remove_mapping).pack(side='right')
+        self.editor_window=tk.Toplevel(self.root)
+        self.editor_window.title('Avatar mapping')
+        self.editor_window.geometry('660x510')
+        self.editor_window.minsize(660,510)
+        self.editor_window.configure(bg='#101412')
+        self.editor_window.withdraw()
+        self.editor_window.protocol('WM_DELETE_WINDOW',self.editor_window.withdraw)
+        frame=ttk.Frame(self.editor_window,padding=28)
+        frame.pack(fill='both',expand=True)
+        ttk.Label(frame,text='Connect a measurement',style='Title.TLabel').pack(anchor='w',pady=(0,8))
         ttk.Separator(frame).pack(fill='x',pady=(16,4))
         editor = ttk.Frame(frame)
         editor.pack(fill='x', pady=10)
@@ -135,9 +171,9 @@ class CompanionWindow:
         ttk.Label(frame,textvariable=self.hint,wraplength=740).pack(anchor='w',pady=6)
         actions = ttk.Frame(frame)
         actions.pack(fill='x')
-        ttk.Button(actions,text='+ New mapping',command=self.new_mapping).pack(side='left')
+        ttk.Button(actions,text='Cancel',command=self.editor_window.withdraw).pack(side='left')
         ttk.Button(actions,text='Save mapping',style='Accent.TButton',command=self.save_mapping).pack(side='left',padx=8)
-        ttk.Button(actions,text='Remove',command=self.remove_mapping).pack(side='left')
+
         ttk.Checkbutton(actions,text='Enabled',variable=self.enabled).pack(side='right')
         self.update_fields()
         self.refresh_table()
@@ -220,12 +256,16 @@ class CompanionWindow:
         self.table.selection_remove(*self.table.selection())
         self.target.set('')
         self.enabled.set(True)
+        self.editor_window.deiconify()
+        self.editor_window.lift()
 
     def edit_selected(self, _event=None):
         selected = self.table.selection()
         if not selected: return
         items = self.config['profiles'].get(self.profile,[])
         if int(selected[0]) >= len(items): return
+        self.editor_window.deiconify()
+        self.editor_window.lift()
         item = items[int(selected[0])]
         source = next((s for s in self.sources if s['id']==item['source']),None)
         self.source.set(self.source_label(source) if source else '')
@@ -251,6 +291,7 @@ class CompanionWindow:
             with self.lock: self.config['profiles'][self.profile]=items
             self.persist()
             self.refresh_table()
+            self.editor_window.withdraw()
         except (ValueError,OSError) as error: messagebox.showerror('Mapping',str(error))
 
     def remove_mapping(self):
@@ -326,7 +367,9 @@ class CompanionWindow:
                 if not self.source.get() and self.sources: self.source.set(self.source_label(self.sources[0]))
                 self.target_box.configure(values=sorted((self.discovery or {}).get('parameters',{})))
                 if changed:
-                    self.new_mapping()
+                    self.table.selection_remove(*self.table.selection())
+                    self.target.set('')
+                    self.editor_window.withdraw()
                     self.refresh_table()
                 elif not self.table.selection(): self.refresh_table()
                 if changed or previous_labels != [self.source_label(s) for s in self.sources]:
