@@ -6,7 +6,7 @@ case "$family" in
   ubuntu)
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y --no-install-recommends xvfb ca-certificates fonts-dejavu-core libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+    apt-get install -y --no-install-recommends xvfb ca-certificates fonts-dejavu-core libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 libxcb-xfixes0 libxcb-sync1 libxcb-shm0 libxcb-render0 libxcb-glx0 libxcb-xkb1
     ;;
   fedora)
     dnf install -y xorg-x11-server-Xvfb ca-certificates dejavu-sans-fonts mesa-libEGL libglvnd-opengl libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
@@ -16,7 +16,7 @@ case "$family" in
     ;;
   opensuse)
     zypper --non-interactive refresh
-    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts libEGL1 libOpenGL0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts libEGL1 libOpenGL0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 libxcb-xfixes0 libxcb-sync1 libxcb-shm0 libxcb-render0 libxcb-glx0 libxcb-xkb1
     ;;
   *) echo "Unknown family: $family" >&2; exit 2 ;;
 esac
