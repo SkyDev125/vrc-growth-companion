@@ -2,6 +2,13 @@ name: Build desktop installers
 on:
   push:
     branches: [main]
+    paths:
+      - companion/desktop.py
+      - companion/vrchat_companion.py
+      - companion/build-desktop.py
+      - companion/smoke-desktop.py
+      - companion/windows-installer.iss
+      - companion/test_*.py
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,0 +1,61 @@
+name: Linux family compatibility
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/linux-compatibility.yml
+      - companion/linux-compatibility.sh
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    name: Test ${{ matrix.family }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: ubuntu
+            image: ubuntu:22.04
+          - family: fedora
+            image: fedora:43
+          - family: arch
+            image: archlinux:base
+          - family: opensuse
+            image: opensuse/leap:16.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the released executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag=$(gh release view --json tagName --jq .tagName)
+          echo "Testing release $tag" | tee release-under-test.txt
+          gh release download "$tag" --pattern mids-den-companion-linux-x64 --pattern SHA256SUMS.txt --dir compat-artifact
+          cd compat-artifact
+          grep '  mids-den-companion-linux-x64$' SHA256SUMS.txt | sha256sum --check --strict
+          chmod +x mids-den-companion-linux-x64
+      - name: Test in distro userland with a virtual display
+        env:
+          DISTRO_IMAGE: ${{ matrix.image }}
+          DISTRO_FAMILY: ${{ matrix.family }}
+        run: |
+          mkdir -p reports
+          cp release-under-test.txt reports/
+          docker pull "$DISTRO_IMAGE"
+          docker image inspect "$DISTRO_IMAGE" --format '{{json .RepoDigests}}' > reports/image-digests.json
+          docker run --rm \
+            -v "$PWD/compat-artifact:/app:ro" \
+            -v "$PWD/companion:/tests:ro" \
+            -v "$PWD/reports:/reports" \
+            "$DISTRO_IMAGE" bash /tests/linux-compatibility.sh "$DISTRO_FAMILY" \
+            2>&1 | tee reports/container.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compatibility-${{ matrix.family }}
+          path: reports/
+          if-no-files-found: warn
