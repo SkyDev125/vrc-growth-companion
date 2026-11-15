@@ -9,8 +9,8 @@ ApplicationWindow {
     visible: true
     width: 960; height: 640
     minimumWidth: 820; minimumHeight: 600
-    color: "transparent"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    color: "#0f151e"
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
     title: "Mid’s Den · Companion"
     font.family: Qt.platform.os === "windows" ? "Segoe UI" : Qt.platform.os === "osx" ? "SF Pro Display" : "DejaVu Sans"
     font.pixelSize: 13
@@ -79,24 +79,12 @@ ApplicationWindow {
         }
     }
     Rectangle {
-        anchors.fill: parent; color: "#0f151e"; radius: window.visibility === Window.Maximized ? 0 : 14; border.color: "#2c3746"
+        anchors.fill: parent; color: "#0f151e"; radius: 0; border.width: 0
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 1; spacing: 0
-            Item {
-                Layout.fillWidth: true; Layout.preferredHeight: 34
-                MouseArea { anchors.fill: parent; onPressed: window.startSystemMove(); onDoubleClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized() }
-                RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 4; spacing: 0
-                    SmallText { text: "MID’S DEN / COMPANION"; color: "#8190a3"; font.pixelSize: 10; font.letterSpacing: 1 }
-                    Item { Layout.fillWidth: true }
-                    CaptionButton { objectName: "minimizeWindow"; captionAction: "minimize"; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.showMinimized() }
-                    CaptionButton { objectName: "maximizeWindow"; captionAction: "maximize"; maximized: window.visibility === Window.Maximized; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized() }
-                    CaptionButton { objectName: "closeWindow"; captionAction: "close"; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.close() }
-                }
-            }
             ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
-                Layout.leftMargin: 24; Layout.rightMargin: 24; Layout.bottomMargin: 14
+                Layout.leftMargin: 24; Layout.rightMargin: 24; Layout.topMargin: 18; Layout.bottomMargin: 14
                 spacing: 18
                 RowLayout {
                     Layout.fillWidth: true; spacing: 12
@@ -200,7 +188,6 @@ ApplicationWindow {
                 }
             }
         }
-        MouseArea { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 12; height: 12; cursorShape: Qt.SizeFDiagCursor; onPressed: window.startSystemResize(Qt.RightEdge | Qt.BottomEdge) }
     }
     Popup {
         id: presets

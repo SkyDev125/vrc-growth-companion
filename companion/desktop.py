@@ -224,6 +224,26 @@ class CompanionWindow(QObject):
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)
 
+def style_native_frame(window):
+    """Theme our own native Windows frame without replacing its controls."""
+    if sys.platform!='win32':return
+    import ctypes
+    from ctypes import wintypes
+    try:
+        set_attribute=ctypes.WinDLL('dwmapi').DwmSetWindowAttribute
+        set_attribute.argtypes=[wintypes.HWND,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD]
+        set_attribute.restype=ctypes.c_long
+        hwnd=int(window.winId())
+        dark=wintypes.BOOL(True)
+        set_attribute(hwnd,20,ctypes.byref(dark),ctypes.sizeof(dark))
+        # Windows 11 supports caption colors; older Windows keeps its OS theme.
+        for attribute,rgb in ((35,0x001e150f),(36,0x00f7f3f0)):
+            color=wintypes.DWORD(rgb)
+            set_attribute(hwnd,attribute,ctypes.byref(color),ctypes.sizeof(color))
+    except (OSError,AttributeError):
+        pass
+
+
 def main():
     os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Basic')
     # A software scene graph keeps the companion independent of the game's GPU.
@@ -238,10 +258,21 @@ def main():
     engine=QQmlApplicationEngine();engine.rootContext().setContextProperty('bridge',controller)
     engine.load(QUrl.fromLocalFile(str(ui_path()/'Main.qml')))
     if not engine.rootObjects():raise RuntimeError('The companion interface could not load.')
+    window=engine.rootObjects()[0]
+    style_native_frame(window)
     app.aboutToQuit.connect(controller.close)
     if smoke:
         import ssl,zeroconf
         ssl.create_default_context();core.encode_eyeheight_packet(1000)
+        if sys.platform=='win32':
+            from ctypes import wintypes
+            get_style=ctypes.windll.user32.GetWindowLongW
+            get_style.argtypes=[wintypes.HWND,ctypes.c_int]
+            get_style.restype=ctypes.c_long
+            style=get_style(int(window.winId()),-16)
+            assert style & 0x00c00000 == 0x00c00000, 'Native caption missing'
+            assert style & 0x00020000 and style & 0x00010000, 'Native minimize/maximize controls missing'
+            assert style & 0x00040000, 'Native resize frame missing'
         controller.openEditor(-1)
         def finish():
             Path(os.environ['MIDSDEN_SMOKE_REPORT']).write_text(json.dumps({'status':'ok','platform':sys.platform}))

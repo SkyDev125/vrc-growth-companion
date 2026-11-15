@@ -101,20 +101,14 @@ class QuickInterfaceTests(unittest.TestCase):
   self.assertLessEqual(row_bottom,list_bottom+.1)
   self.assertFalse(self.warnings,self.warnings)
 
- def test_caption_controls_have_centered_icons_and_consistent_hit_areas(self):
-  controls=[self.root.findChild(QObject,name) for name in ('minimizeWindow','maximizeWindow','closeWindow')]
-  for control in controls:
-   self.assertEqual(control.width(),44)
-   self.assertEqual(control.height(),32)
-   symbol=control.findChild(QObject,'captionSymbol')
-   self.assertAlmostEqual(symbol.mapToScene(symbol.boundingRect().center()).x(),control.mapToScene(control.boundingRect().center()).x(),places=1)
-   self.assertAlmostEqual(symbol.mapToScene(symbol.boundingRect().center()).y(),control.mapToScene(control.boundingRect().center()).y(),places=1)
-   QTest.mouseMove(self.root,control.mapToScene(control.boundingRect().center()).toPoint());QTest.qWait(110)
-   self.assertTrue(control.property('hovered'))
-  for _ in range(75):
-   if self.evaluate(controls[-1],'background.color.toString()')=='#c84350':break
-   QTest.qWait(20)
-  self.assertEqual(self.evaluate(controls[-1],'background.color.toString()'),'#c84350')
+ def test_window_uses_native_frame_and_controls(self):
+  flags=self.root.flags()
+  self.assertFalse(flags & Qt.WindowType.FramelessWindowHint)
+  self.assertTrue(flags & Qt.WindowType.WindowTitleHint)
+  self.assertTrue(flags & Qt.WindowType.WindowMinMaxButtonsHint)
+  self.assertIsNone(self.root.findChild(QObject,'minimizeWindow'))
+  self.assertIsNone(self.root.findChild(QObject,'maximizeWindow'))
+  self.assertIsNone(self.root.findChild(QObject,'closeWindow'))
  def test_mouse_focus_has_no_gold_outline_but_keyboard_focus_does(self):
   settings=self.root.findChild(QObject,'connectionSettings')
   self.root.requestActivate();QTest.qWait(50)
