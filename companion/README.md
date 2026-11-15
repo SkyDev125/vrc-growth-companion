@@ -10,6 +10,14 @@ The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.
 
 Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt Quick/QML through PySide6, bundled with the application. It uses the website’s paw icon for the app and native installers. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
 
+## Smooth growth
+
+In Settings, choose **Growth → Smooth** (experimental; Instant remains the default). Small changes take a few seconds; larger proportional changes get more time, capped at 120 seconds. The same relative change takes the same duration at small and giant scales. The curve eases in and out, reaches the exact endpoint, and retargets from its current value when a new send arrives. **Finish now** completes the current transition.
+
+Eye height and linked float mappings smooth by default when this mode is enabled. Each float mapping has its own **Smooth** switch; unrelated parameters opt in there. Boolean and integer mappings stay immediate. Linked quantities keep their linear, squared or cubic relationship throughout the animation. Custom units stay in their saved units. The website and bot continue to show the final calculated amounts; only the companion animates the transition.
+
+The animation worker runs at up to 20 updates per second separately from five-second website polling, deduplicates identical OSC packets, and stops sending once settled. Pause, mapping removal/disable, destination changes and detected VRChat disconnection cancel outgoing transitions. Starting/reconnecting uses observed eye height when OSCQuery provides it; without an observed start, the current website value is applied once. World-disabled height writes are skipped. Smooth OSC scaling can expose VRChat camera jitter on some systems; use Instant if needed. Native automated checks do not replace an in-game Windows/VR comfort test.
+
 ## Updates
 
 From version 1.3.0, the installed app checks on startup and every six hours. Choose **Update & restart** when convenient; Settings also has **Check updates**. Mappings and connection settings are kept. No Python or separate updater installation is required. An unsigned older app needs one manual upgrade to get this feature.

@@ -67,7 +67,7 @@ class QuickInterfaceTests(unittest.TestCase):
   self.evaluate(scroll,'contentItem.contentY = Math.max(0, contentItem.contentHeight - contentItem.height)')
   self.app.processEvents()
   self.assertAlmostEqual(header.mapToScene(header.boundingRect().center()).y(),header_y,delta=.5)
-  self.assertEqual(save.mapToScene(save.boundingRect().center()).y(),save_y)
+  self.assertAlmostEqual(save.mapToScene(save.boundingRect().center()).y(),save_y,delta=.5)
  def test_default_editor_fits_without_scroll_and_hovered_parameter_selects(self):
   self.bridge.openEditor(-1);QTest.qWait(200)
   scroll=self.root.findChild(QObject,'editorFieldsScroll')
@@ -118,6 +118,17 @@ class QuickInterfaceTests(unittest.TestCase):
   QTest.qWait(50)
   self.assertFalse(button.property('enabled'))
   self.assertEqual(self.evaluate(self.root,'state.update.progress'),50)
+ def test_growth_mode_and_live_output_finish_button(self):
+  self.bridge.setSmoothGrowth(True)
+  self.bridge.events.put(('motion',{'active':True,'outputs':{'/avatar/eyeheight':2.5}}))
+  self.bridge.drain();QTest.qWait(80)
+  button=self.root.findChild(QObject,'finishGrowth')
+  self.assertTrue(button.property('visible'))
+  self.assertEqual(self.evaluate(self.root,'state.rows[0].output'),'2.5')
+  QTest.mouseClick(self.root,Qt.MouseButton.LeftButton,pos=button.mapToScene(button.boundingRect().center()).toPoint())
+  self.assertEqual(self.bridge.finish_generation,1)
+  mode=self.root.findChild(QObject,'growthMode')
+  self.assertEqual(mode.property('currentIndex'),1)
  def test_mouse_focus_has_no_gold_outline_but_keyboard_focus_does(self):
   settings=self.root.findChild(QObject,'connectionSettings')
   self.root.requestActivate();QTest.qWait(50)

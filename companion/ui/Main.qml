@@ -50,11 +50,12 @@ ApplicationWindow {
         outMax.text = String(draft.outputMax === undefined ? 1 : draft.outputMax)
         threshold.text = String(draft.threshold === undefined ? 1 : draft.threshold)
         enabledToggle.checked = draft.enabled !== false
+        smoothMapping.checked = draft.smooth !== undefined ? draft.smooth : !!(draft.target === "/avatar/eyeheight" || (editorData.sources[sourceSelect.currentIndex] || {}).syncTarget && editorData.sources[sourceSelect.currentIndex].syncTarget !== "none")
         editor.open()
     }
     function saveEditor() {
         var item = {source:sourceSelect.currentValue || "",target:parameter.address,
-            kind:kindSelect.currentValue,mode:modeSelect.currentValue,enabled:enabledToggle.checked,
+            kind:kindSelect.currentValue,mode:modeSelect.currentValue,enabled:enabledToggle.checked,smooth:smoothMapping.checked,
             inputMin:inMin.text,inputMax:inMax.text,outputMin:outMin.text,outputMax:outMax.text,threshold:threshold.text}
         editError = bridge.saveMapping(JSON.stringify(item))
         if (!editError) editor.close()
@@ -193,7 +194,8 @@ ApplicationWindow {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    SmallText { text: window.state.status; Layout.fillWidth: true }
+                    SmallText { text: window.state.motion.active ? "Growing…" : window.state.status; Layout.fillWidth: true }
+                    ActionButton { objectName:"finishGrowth"; text:"Finish now"; quiet:true; visible:window.state.motion.active; onClicked:bridge.finishGrowth() }
                     SmallText { text: "Checks every 5s · sends changes only" }
                 }
             }
@@ -259,6 +261,7 @@ ApplicationWindow {
                     onSelected: function(address,kind) {
                         kindSelect.currentIndex = ["float","int","bool"].indexOf(kind)
                         if (address === "/avatar/eyeheight") {
+                            smoothMapping.checked = true
                             sourceSelect.currentIndex = sourceSelect.model.findIndex(s => s.value === "height")
                             modeSelect.currentIndex = 0
                         } else if (kind === "bool") modeSelect.currentIndex = 3
@@ -309,6 +312,8 @@ ApplicationWindow {
                 Layout.fillWidth: true; Layout.fillHeight: false; spacing: 8
                 Toggle { id: enabledToggle; Accessible.name: "Mapping enabled" }
                 SmallText { text: enabledToggle.checked ? "Enabled" : "Disabled" }
+                Toggle { id:smoothMapping; objectName:"smoothMapping"; visible:kindSelect.currentValue === "float"; Accessible.name:"Smooth this mapping" }
+                SmallText { text:"Smooth"; visible:kindSelect.currentValue === "float" }
                 Item { Layout.fillWidth: true }
                 ActionButton { text: "Cancel"; quiet: true; onClicked: editor.close() }
                 ActionButton { objectName: "saveMapping"; text: "Save mapping"; primary: true; onClicked: window.saveEditor() }
@@ -323,7 +328,17 @@ ApplicationWindow {
         Overlay.modal: Rectangle { color: "#a6080d15" }
         contentItem: ColumnLayout {
             spacing: 12
-            Text { text: "Connection settings"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
+            Text { text: "Settings"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
+            RowLayout {
+                Layout.fillWidth:true
+                FieldLabel { text:"Growth" }
+                SelectField { objectName:"growthMode"; Layout.preferredWidth:170
+                    model:[{label:"Instant",value:false},{label:"Smooth",value:true}]
+                    currentIndex:window.state.smoothGrowth ? 1 : 0
+                    onActivated:bridge.setSmoothGrowth(currentValue)
+                }
+            }
+            SmallText { text:"Smooth is experimental · finishes within 2 minutes" }
             FieldLabel { text: "VRChat IP address" }
             InputField { id: hostInput; Layout.fillWidth: true }
             FieldLabel { text: "OSC receive port" }

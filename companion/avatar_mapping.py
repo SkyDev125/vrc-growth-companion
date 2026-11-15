@@ -51,6 +51,7 @@ def validate_mapping(mapping):
         raise ValueError('The website maximum must be greater than its minimum.')
     result['mode'] = mode
     result['enabled'] = result.get('enabled', True) is True
+    if 'smooth' in result:result['smooth']=result['smooth'] is True
     return result
 
 
@@ -111,14 +112,21 @@ def send_mapping(config, mapping, source):
 def parse_tree(tree):
     writable, all_parameters = {}, {}
     avatar = None
+    eye_height=None;scaling_allowed=None
     def walk(node, path='/', inherited=0, depth=0):
-        nonlocal avatar
+        nonlocal avatar,eye_height,scaling_allowed
         if not isinstance(node, dict) or depth > 32:
             return
         path = node.get('FULL_PATH', path)
         try: access = int(node.get('ACCESS', inherited))
         except (ValueError, TypeError): access = 0
         values = node.get('VALUE', [])
+        if path=='/avatar/eyeheight' and isinstance(values,list) and values:
+            try:
+                candidate=float(values[0])
+                if math.isfinite(candidate) and core.MIN_METERS<=candidate<=core.MAX_METERS:eye_height=candidate
+            except (TypeError,ValueError):pass
+        if path=='/avatar/eyeheightscalingallowed' and isinstance(values,list) and values and type(values[0]) is bool:scaling_allowed=values[0]
         if path == '/avatar/change':
             value = values[0] if isinstance(values, list) and values else values
             if isinstance(value, str) and value.startswith('avtr_'):
@@ -133,7 +141,7 @@ def parse_tree(tree):
             for key, child in contents.items():
                 walk(child, str(path).rstrip('/')+'/'+key, access, depth+1)
     walk(tree)
-    return {'avatar': avatar, 'parameters': writable, 'allParameters': all_parameters}
+    return {'avatar': avatar, 'parameters': writable, 'allParameters': all_parameters, 'eyeHeight':eye_height,'scalingAllowed':scaling_allowed}
 
 
 def query_json(host, port, path='/'):
@@ -189,7 +197,7 @@ def discover(config, known_port=None, browse=True):
         try:
             tree = query_json(host, port)
             result = parse_tree(tree)
-            if result['parameters'] or result['avatar']:
+            if result['parameters'] or result['avatar'] or result['eyeHeight'] is not None:
                 result['queryPort'] = port
                 return result
         except (OSError, ValueError):

@@ -15,6 +15,7 @@ import vrchat_companion as core
 import avatar_mapping as mapping
 from measurement_format import format_measurement
 from update_controller import UpdateController
+from smooth_growth import MotionSender
 
 
 def settings_path():
@@ -34,6 +35,7 @@ class CompanionWindow(QObject):
         super().__init__()
         self.events=queue.Queue();self.lock=threading.Lock();self.stop_event=threading.Event();self.worker=None
         self.sources=[];self.discovery=None;self.profile='manual';self.resend_generation=0
+        self.motion_epoch=0;self.finish_generation=0;self.motion={'active':False,'outputs':{}}
         self.detected=False;self.paused=False;self.status='Ready';self.editor=None;self.editor_error=''
         try:self.config=core.load_config(settings_path())
         except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
@@ -60,15 +62,20 @@ class CompanionWindow(QObject):
                     value=mapping.mapped_value(item,source)
                     output=('On' if value else 'Off') if isinstance(value,bool) else f'{value:.4g}'
                     health='ready'
+                    if item['target'] in self.motion['outputs']:
+                        value=self.motion['outputs'][item['target']]
+                        output=('On' if value else 'Off') if isinstance(value,bool) else f'{value:.4g}'
                 except (ValueError,KeyError,TypeError,OverflowError):output='Invalid';health='error'
             elif source:output='Unavailable';health='waiting'
+            if item['target']=='/avatar/eyeheight' and (self.discovery or {}).get('scalingAllowed') is False:
+                output='Blocked';health='waiting'
             rows.append({'name':source['name'] if source else ('Height' if item['source']=='height' else item['source']),
                 'value':format_measurement(source['value'],source['unit']) if source else 'Waiting for website',
                 'target':'Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX),
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
             'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
-            'update':self.updates.state})
+            'update':self.updates.state,'smoothGrowth':self.config.get('smoothGrowth',False),'motion':self.motion})
 
     @Slot()
     def checkUpdates(self):self.updates.check()
@@ -145,13 +152,22 @@ class CompanionWindow(QObject):
             address=core.validate_osc_host(host);number=int(port)
             if not 1<=number<=65535:raise ValueError('Use a port between 1 and 65535.')
             with self.lock:self.config.update(oscHost=address,oscPort=number)
-            self.persist();self.discovery=None;self.stateChanged.emit();return ''
+            self.persist();self.discovery=None;self.motion_epoch+=1;self.motion={'active':False,'outputs':{}};self.stateChanged.emit();return ''
         except (ValueError,OSError) as error:return str(error)
 
     @Slot()
     def resend(self):
         with self.lock:self.resend_generation+=1
         self.status='Resend requested · next check';self.stateChanged.emit()
+
+    @Slot(bool)
+    def setSmoothGrowth(self,enabled):
+        with self.lock:self.config['smoothGrowth']=enabled
+        self.persist();self.stateChanged.emit()
+
+    @Slot()
+    def finishGrowth(self):
+        with self.lock:self.finish_generation+=1
 
     def start(self):
         if self.worker and self.worker.is_alive():QTimer.singleShot(150,self.start);return
@@ -160,7 +176,7 @@ class CompanionWindow(QObject):
     @Slot()
     def toggleRun(self):
         if self.worker and self.worker.is_alive() and not self.stop_event.is_set():
-            self.stop_event.set();self.paused=True;self.status='Syncing paused';self.stateChanged.emit()
+            self.stop_event.set();self.motion={'active':False,'outputs':{}};self.paused=True;self.status='Syncing paused';self.stateChanged.emit()
         else:self.start()
 
     def drain(self):
@@ -171,6 +187,7 @@ class CompanionWindow(QObject):
             changed=True
             if event[0]=='connection':self.detected=event[1]
             elif event[0]=='status':self.status=event[1]
+            elif event[0]=='motion':self.motion=event[1]
             else:
                 self.sources,self.discovery=event[1:];self.profile=mapping.profile_key(self.discovery)
                 if self.editor and self.editor['profile']!=self.profile:
@@ -182,7 +199,7 @@ class CompanionWindow(QObject):
     def sync(self, stop):
         last_browse = 0
         known_port = None
-        sender=mapping.ChangedSender()
+        sender=MotionSender(self,stop)
         was_detected=False
         ever_detected=False
         reconnect=0
@@ -198,8 +215,9 @@ class CompanionWindow(QObject):
                 if discovery and not was_detected:reconnect+=1
                 was_detected=bool(discovery)
                 self.events.put(('connection',bool(discovery)))
-                with self.lock:requested_generation=self.resend_generation
+                with self.lock:requested_generation=self.resend_generation;epoch=self.motion_epoch
                 if not discovery and ever_detected and requested_generation==last_generation:
+                    sender.clear()
                     self.events.put(('status','VRChat discovery lost · waiting to reconnect'))
                     stop.wait(core.DEFAULT_POLL_SECONDS)
                     continue
@@ -211,29 +229,20 @@ class CompanionWindow(QObject):
                         self.config['profiles'][profile]=[mapping.eye_height_preset()]
                         core.save_config(self.config,settings_path())
                     config=copy.deepcopy(self.config)
-                    generation=self.resend_generation
-                sender.begin((config['oscHost'],config['oscPort'],profile,known_port,reconnect,generation))
+                    generation=self.resend_generation;epoch=self.motion_epoch
                 sources = mapping.fetch_measurements(config)
+                if epoch!=self.motion_epoch:continue
                 self.events.put(('data',sources,discovery))
-                sent, skipped, active = 0, 0, 0
-                source_map = {s['id']:s for s in sources}
                 items=config.get('profiles',{}).get(profile,[])
-                sender.prune({item['target'] for item in items if item.get('enabled',True) and mapping.can_send(item,source_map,discovery)})
-                for item in items:
-                    if stop.is_set(): break
-                    if not item.get('enabled',True): continue
-                    if not mapping.can_send(item,source_map,discovery):
-                        skipped+=1
-                        continue
-                    try:
-                        if sender.send(config,item,source_map[item['source']]):sent+=1
-                        active+=1
-                    except (OSError,ValueError,KeyError,TypeError,OverflowError): skipped+=1
+                sender.submit((config['oscHost'],config['oscPort'],profile,known_port,reconnect,generation),config,items,sources,discovery)
+                active=sum(i.get('enabled',True) for i in items)
+                skipped=0;sent=0
                 last_generation=generation
                 self.events.put(('status',f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else '')))
             except (OSError,ValueError,RuntimeError) as error:
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)
+        sender.close()
 
 def style_native_frame(window):
     """Theme our own native Windows frame without replacing its controls."""

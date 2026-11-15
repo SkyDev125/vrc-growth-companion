@@ -70,6 +70,11 @@ class DesktopTests(unittest.TestCase):
   self.window.updates.events.put(('error','Download failed; please retry'))
   self.window.updates.drain()
   self.assertIn('retry',json.loads(self.window.stateJson)['update']['message'])
+ def test_growth_mode_persists_and_finish_command(self):
+  self.assertFalse(json.loads(self.window.stateJson)['smoothGrowth'])
+  self.window.setSmoothGrowth(True)
+  self.assertTrue(desktop.core.load_config(Path(self.temp.name)/'config.json')['smoothGrowth'])
+  self.window.finishGrowth();self.assertEqual(self.window.finish_generation,1)
  def test_worker_sends_changes_avatar_switch_and_reconnect_only(self):
   import avatar_mapping as m
   a={'avatar':'avtr_a','queryPort':9001,'parameters':{}}
