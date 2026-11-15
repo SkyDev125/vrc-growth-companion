@@ -85,3 +85,18 @@ class QuickInterfaceTests(unittest.TestCase):
   picker=self.root.findChild(QObject,'parameterSearch').parentItem()
   self.assertEqual(picker.property('address'),'/avatar/eyeheight')
   self.assertFalse(self.warnings,self.warnings)
+
+ def test_single_parameter_highlight_is_fully_inside_list(self):
+  self.bridge.discovery={'parameters':{},'allParameters':{}}
+  self.bridge.openEditor(0);QTest.qWait(200)
+  arrow=self.root.findChild(QObject,'parameterDropdown')
+  QTest.mouseClick(self.root,Qt.MouseButton.LeftButton,pos=arrow.mapToScene(arrow.boundingRect().center()).toPoint());QTest.qWait(150)
+  listing=self.root.findChild(QObject,'parameterResults')
+  first=listing.property('contentItem').childItems()[0]
+  QTest.mouseMove(self.root,first.mapToScene(first.boundingRect().center()).toPoint());self.app.processEvents()
+  self.assertTrue(first.property('hovered'))
+  self.assertGreaterEqual(listing.height()+.1,first.height())
+  row_bottom=first.mapToScene(first.boundingRect().bottomRight()).y()
+  list_bottom=listing.mapToScene(listing.boundingRect().bottomRight()).y()
+  self.assertLessEqual(row_bottom,list_bottom+.1)
+  self.assertFalse(self.warnings,self.warnings)

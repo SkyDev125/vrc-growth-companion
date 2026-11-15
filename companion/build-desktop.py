@@ -30,7 +30,7 @@ elif sys.platform=='darwin':
             render_icon(size*2,iconset/f'icon_{size}x{size}@2x.png')
         subprocess.run(['iconutil','-c','icns',str(iconset),'-o',str(out/'app-icon.icns')],check=True)
     icon_args=['--icon',str(out/'app-icon.icns')]
-subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed',
+subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir' if sys.platform=='win32' else '--onefile', '--windowed',
     '--exclude-module','tkinter','--exclude-module','PySide6.QtWidgets',
     '--add-data',str(project/'companion/measurement-units.json')+os.pathsep+'.',
     '--add-data',str(project/'companion/ui')+os.pathsep+'ui',

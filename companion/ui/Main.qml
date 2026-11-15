@@ -133,7 +133,7 @@ ApplicationWindow {
                             Text { text: "Mappings"; color: "#e8edf3"; font.pixelSize: 15; font.weight: Font.DemiBold }
                             Rectangle { width: countText.width + 14; height: 22; radius: 6; color: "#283343"; Text { id: countText; anchors.centerIn: parent; text: mappingModel.count; color: "#b8c4d1"; font.pixelSize: 11 } }
                             Item { Layout.fillWidth: true }
-                            ActionButton { id: presetsButton; text: "Presets ⌄"; quiet: true; onClicked: presets.open() }
+                            MenuButton { id: presetsButton; text: "Presets"; quiet: true; expanded: presets.visible; onClicked: presets.visible ? presets.close() : presets.open() }
                             ActionButton { text: "+ New mapping"; primary: true; onClicked: bridge.openEditor(-1) }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#293443" }
@@ -204,8 +204,9 @@ ApplicationWindow {
     }
     Popup {
         id: presets
-        parent: window.contentItem
-        x: Math.max(20, window.width - width - 165); y: 180; width: 190; padding: 6
+        parent: presetsButton
+        x: presetsButton.width - width; y: presetsButton.height + 6; width: 190; padding: 6
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { radius: 10; color: "#202c3a"; border.color: "#3a485a" }
         contentItem: ActionButton { text: "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
     }

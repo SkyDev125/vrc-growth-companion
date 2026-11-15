@@ -73,12 +73,13 @@ Item {
         id: popup
         parent: picker
         y: picker.height + 6; width: picker.width
-        height: Math.min(300, list.contentHeight + 12 + caption.implicitHeight + (picker.filtered.length === 0 ? emptyMessage.implicitHeight + 6 : 4))
+        height: Math.min(300, parameterContent.implicitHeight + topPadding + bottomPadding)
         padding: 6; margins: 8; clip: true
         focus: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { color: "#1b2633"; radius: 12; border.color: "#3a495b" }
         contentItem: ColumnLayout {
+            id: parameterContent
             spacing: 4
             Text { id: caption; text: picker.browsingAll ? "AVATAR PARAMETERS" : "SEARCH RESULTS"; color: "#8c9bac"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.leftMargin: 8; Layout.topMargin: 4 }
             ListView {
@@ -86,6 +87,8 @@ Item {
                 objectName: "parameterResults"
                 Layout.fillWidth: true; Layout.fillHeight: true
                 Layout.minimumHeight: 0
+                Layout.preferredHeight: contentHeight
+                implicitHeight: contentHeight
                 model: picker.filtered; clip: true
                 ScrollBar.vertical: ScrollBar {}
                 delegate: ItemDelegate {
