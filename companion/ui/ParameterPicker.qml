@@ -61,7 +61,8 @@ Item {
     ActionButton {
         objectName: "parameterDropdown"
         anchors.right: parent.right; anchors.rightMargin: 3; anchors.verticalCenter: parent.verticalCenter
-        width: 34; height: 34; quiet: true; text: "⌄"
+        width: 34; height: 34; quiet: true; text: ""
+        contentItem: Item { Chevron { objectName: "parameterChevron"; anchors.centerIn: parent; expanded: popup.visible } }
         Accessible.name: "Browse avatar parameters"
         onClicked: {
             if (popup.visible) popup.close()
@@ -72,18 +73,19 @@ Item {
         id: popup
         parent: picker
         y: picker.height + 6; width: picker.width
-        height: Math.min(300, Math.max(86, list.contentHeight + 44))
-        padding: 6
+        height: Math.min(300, list.contentHeight + 12 + caption.implicitHeight + (picker.filtered.length === 0 ? emptyMessage.implicitHeight + 6 : 4))
+        padding: 6; margins: 8; clip: true
         focus: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { color: "#1b2633"; radius: 12; border.color: "#3a495b" }
         contentItem: ColumnLayout {
             spacing: 4
-            Text { text: picker.browsingAll ? "AVATAR PARAMETERS" : "SEARCH RESULTS"; color: "#8c9bac"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.leftMargin: 8; Layout.topMargin: 4 }
+            Text { id: caption; text: picker.browsingAll ? "AVATAR PARAMETERS" : "SEARCH RESULTS"; color: "#8c9bac"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.leftMargin: 8; Layout.topMargin: 4 }
             ListView {
                 id: list
                 objectName: "parameterResults"
                 Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.minimumHeight: 0
                 model: picker.filtered; clip: true
                 ScrollBar.vertical: ScrollBar {}
                 delegate: ItemDelegate {
@@ -91,6 +93,8 @@ Item {
                     required property int index
                     required property var modelData
                     width: list.width; height: 36
+                    leftPadding: 10; rightPadding: 10; topPadding: 6; bottomPadding: 6; hoverEnabled: true
+                    highlighted: list.currentIndex === index
                     enabled: modelData.writable
                     contentItem: RowLayout {
                         Text { text: row.modelData.name; color: row.enabled ? "#e4ebf1" : "#7e8c9c"; font.pixelSize: 13; elide: Text.ElideMiddle; Layout.fillWidth: true }
@@ -100,7 +104,7 @@ Item {
                     onClicked: picker.choose(index)
                 }
             }
-            Text { visible: picker.filtered.length === 0; text: "No matches. You can enter an exact parameter name."; color: "#a4b0bd"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { id: emptyMessage; visible: picker.filtered.length === 0; text: "No matches. You can enter an exact parameter name."; color: "#a4b0bd"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         }
         enter: Transition { ParallelAnimation { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 110 } NumberAnimation { property: "scale"; from: .98; to: 1; duration: 110 } } }
     }

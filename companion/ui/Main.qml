@@ -7,8 +7,8 @@ ApplicationWindow {
     id: window
     objectName: "companionWindow"
     visible: true
-    width: 920; height: 510
-    minimumWidth: 800; minimumHeight: 430
+    width: 960; height: 640
+    minimumWidth: 820; minimumHeight: 600
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Mid’s Den · Companion"
@@ -215,24 +215,20 @@ ApplicationWindow {
         parent: window.contentItem
         anchors.centerIn: parent
         width: Math.min(610, window.width - 48)
-        height: Math.min(editorColumn.implicitHeight + 48, window.height - 32)
+        height: Math.min(editorLayout.implicitHeight + 48, window.height - 40)
         padding: 24
         modal: true; focus: true
         closePolicy: Popup.CloseOnEscape
         background: Rectangle { radius: 18; color: "#18212d"; border.color: "#405067" }
         Overlay.modal: Rectangle { color: "#a6080d15"; Behavior on opacity { NumberAnimation { duration: 140 } } }
         enter: Transition { ParallelAnimation { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 140 } NumberAnimation { property: "scale"; from: .97; to: 1; duration: 160; easing.type: Easing.OutCubic } } }
-        contentItem: ScrollView {
-            id: editorScroll
-            clip: true
-            contentWidth: availableWidth
-            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-            ColumnLayout {
-            id: editorColumn
-            width: editorScroll.availableWidth
+        contentItem: ColumnLayout {
+            id: editorLayout
             spacing: 16
             RowLayout {
-                Layout.fillWidth: true
+                id: editorHeader
+                objectName: "editorHeader"
+                Layout.fillWidth: true; Layout.fillHeight: false
                 ColumnLayout {
                     spacing: 4
                     Text { text: window.draftIndex >= 0 ? "Edit mapping" : "New mapping"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
@@ -241,6 +237,19 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 ActionButton { text: "×"; quiet: true; onClicked: editor.close(); Accessible.name: "Close mapping editor" }
             }
+            ScrollView {
+                id: editorScroll
+                objectName: "editorFieldsScroll"
+                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.minimumHeight: 0
+                implicitHeight: editorFields.implicitHeight
+                clip: true
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                ColumnLayout {
+                    id: editorFields
+                    width: editorScroll.availableWidth
+                    spacing: 16
             GridLayout {
                 columns: 2; rowSpacing: 7; columnSpacing: 14; Layout.fillWidth: true
                 FieldLabel { text: "Measurement" }
@@ -292,17 +301,20 @@ ApplicationWindow {
                 property string unit: sourceSelect.currentIndex >= 0 && window.editorData.sources ? window.editorData.sources[sourceSelect.currentIndex].unit : "saved units"
                 text: modeSelect.currentValue === "ratio" ? "Current ÷ starting amount. 1 means the original size." : modeSelect.currentValue === "range" ? "Maps the measurement range in " + unit + " to the avatar’s range, with limits." : modeSelect.currentValue === "threshold" ? "Turns on at or above the amount in " + unit + "." : "Sends the current amount in " + unit + "."
             }
+                }
+            }
             Text { text: window.editError; color: "#f1a49c"; visible: text.length > 0; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#303b4a" }
             RowLayout {
-                Layout.fillWidth: true; spacing: 8
+                id: editorFooter
+                objectName: "editorFooter"
+                Layout.fillWidth: true; Layout.fillHeight: false; spacing: 8
                 Toggle { id: enabledToggle; Accessible.name: "Mapping enabled" }
                 SmallText { text: enabledToggle.checked ? "Enabled" : "Disabled" }
                 Item { Layout.fillWidth: true }
                 ActionButton { text: "Cancel"; quiet: true; onClicked: editor.close() }
                 ActionButton { objectName: "saveMapping"; text: "Save mapping"; primary: true; onClicked: window.saveEditor() }
             }
-        }
         }
     }
     Popup {
