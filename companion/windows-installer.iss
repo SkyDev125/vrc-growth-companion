@@ -1,6 +1,6 @@
 [Setup]
 AppName=Mid's Den Companion
-AppVersion=1.2.1
+AppVersion=1.2.2
 DefaultDirName={localappdata}\Programs\MidsDenCompanion
 DefaultGroupName=Mid's Den Companion
 PrivilegesRequired=lowest

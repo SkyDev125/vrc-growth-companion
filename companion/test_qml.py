@@ -111,6 +111,9 @@ class QuickInterfaceTests(unittest.TestCase):
    self.assertAlmostEqual(symbol.mapToScene(symbol.boundingRect().center()).y(),control.mapToScene(control.boundingRect().center()).y(),places=1)
    QTest.mouseMove(self.root,control.mapToScene(control.boundingRect().center()).toPoint());QTest.qWait(110)
    self.assertTrue(control.property('hovered'))
+  for _ in range(75):
+   if self.evaluate(controls[-1],'background.color.toString()')=='#c84350':break
+   QTest.qWait(20)
   self.assertEqual(self.evaluate(controls[-1],'background.color.toString()'),'#c84350')
  def test_mouse_focus_has_no_gold_outline_but_keyboard_focus_does(self):
   settings=self.root.findChild(QObject,'connectionSettings')
