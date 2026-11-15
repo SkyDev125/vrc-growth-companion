@@ -75,6 +75,7 @@ class GrowthTests(unittest.TestCase):
             stop=threading.Event();worker=g.MotionSender(owner,stop)
             try:
                 worker.submit(('127.0.0.1',owner.config['oscPort'],'manual'),owner.config,[item],sources(4),{'eyeHeight':1})
+                with worker.lock:worker.transition.seconds=1
                 first=receiver.recv(2048);second=receiver.recv(2048)
                 self.assertNotEqual(first,second)
                 owner.finish_generation+=1;time.sleep(.1)
@@ -83,3 +84,14 @@ class GrowthTests(unittest.TestCase):
                     except socket.timeout:break
                 with self.assertRaises(socket.timeout):receiver.recv(2048)
             finally:worker.close()
+
+    def test_submillimetre_ramp_suppressed_but_exact_endpoint_sent(self):
+        item=m.eye_height_preset();owner=SimpleNamespace(lock=threading.RLock(),config={'oscHost':'127.0.0.1','oscPort':19000,'smoothGrowth':True,'profiles':{'manual':[item]}},motion_epoch=0,finish_generation=0,events=queue.Queue())
+        stop=threading.Event();writes=[]
+        with patch.object(m,'send_mapping',side_effect=lambda c,i,s:writes.append(s['value'])):
+            worker=g.MotionSender(owner,stop);worker.closed.set();worker.thread.join()
+            with patch.object(g.time,'monotonic',return_value=0):worker.submit(('127.0.0.1',19000,'manual'),owner.config,[item],sources(1),None)
+            with patch.object(g.time,'monotonic',return_value=1):worker.submit(worker.context,owner.config,[item],sources(1.0004),None)
+            worker.tick(2);self.assertEqual(writes,[1])
+            worker.tick(200);self.assertEqual(writes,[1,1.0004])
+            worker.close()

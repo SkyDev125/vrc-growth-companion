@@ -99,10 +99,11 @@ class MotionSender:
         self.sender=mapping.ChangedSender();self.context=None;self.config=None;self.items=[];self.discovery=None
         self.epoch=owner.motion_epoch;self.finish_generation=owner.finish_generation
         self.last_state=None;self.closed=threading.Event()
+        self.height_quantum=None
         self.thread=threading.Thread(target=self.run,daemon=True);self.thread.start()
 
     def clear(self):
-        with self.lock:self.config=None;self.items=[];self.transition=Transition();self.last_state=None
+        with self.lock:self.config=None;self.items=[];self.transition=Transition();self.last_state=None;self.height_quantum=None
         self.owner.events.put(('motion',{'active':False,'outputs':{}}))
 
     def submit(self, context, config, items, sources, discovery):
@@ -110,6 +111,7 @@ class MotionSender:
         with self.lock:
             if context!=self.context:
                 self.transition=Transition();self.context=context;self.sender.begin(context)
+                self.height_quantum=None
             self.config=config;self.items=copy.deepcopy(items);self.discovery=discovery;self.epoch=self.owner.motion_epoch
             raw={s['id']:s for s in sources}
             animated={i['source'] for i in items if i.get('enabled',True) and wants_smoothing(i,raw,config.get('smoothGrowth',False))}
@@ -136,8 +138,14 @@ class MotionSender:
             source=(displayed if smooth else raw)[item['source']]
             if item['target']=='/avatar/eyeheight' and (self.discovery or {}).get('scalingAllowed') is False:continue
             try:
-                self.sender.send(self.config,item,source)
-                outputs[item['target']]=mapping.mapped_value(item,source)
+                value=mapping.mapped_value(item,source)
+                quantum=round(value,3) if item['target']=='/avatar/eyeheight' else None
+                # Remote scale sync is millimetre-quantized. Avoid repeatedly poking the
+                # same effective height during a slow ramp; always allow the exact endpoint.
+                if not (smooth and self.transition.active(now) and quantum is not None and quantum==self.height_quantum):
+                    self.sender.send(self.config,item,source)
+                    if quantum is not None:self.height_quantum=quantum
+                outputs[item['target']]=value
                 active=active or (smooth and self.transition.active(now))
             except (OSError,ValueError,OverflowError,KeyError):continue
         state={'active':active,'outputs':outputs}
