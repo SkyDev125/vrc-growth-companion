@@ -77,5 +77,6 @@ with tempfile.TemporaryDirectory() as directory:
             subprocess.run([str(mounted), '--self-test'], env=env, check=True, timeout=90)
             assert json.loads(report.read_text())['status'] == 'ok'
         finally:
-            subprocess.run(['hdiutil', 'detach', str(mount)], check=True)
+            from macos_image import run_image_tool
+            run_image_tool(['detach',str(mount)],force_detach=True)
         print('macOS app launches from mounted DMG')

@@ -12,6 +12,7 @@ on:
       - companion/desktop.py
       - companion/vrchat_companion.py
       - companion/build-desktop.py
+      - companion/macos_image.py
       - companion/smoke-desktop.py
       - companion/windows-installer.iss
       - companion/test_*.py

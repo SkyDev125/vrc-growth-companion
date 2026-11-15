@@ -46,4 +46,5 @@ elif sys.platform == 'darwin':
         stage = Path(folder)
         shutil.copytree(out / (name + '.app'), stage / (name + '.app'), symlinks=True)
         (stage / 'Applications').symlink_to('/Applications')
-        subprocess.run(['hdiutil', 'create', '-volname', "Mid's Den Companion", '-srcfolder', str(stage), '-ov', str(out / 'mids-den-companion-macos.dmg')], check=True)
+        from macos_image import run_image_tool
+        run_image_tool(['create','-volname',"Mid's Den Companion",'-srcfolder',str(stage),'-ov',str(out/'mids-den-companion-macos.dmg')])
