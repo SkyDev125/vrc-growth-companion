@@ -10,6 +10,14 @@ The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.
 
 Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt Quick/QML through PySide6, bundled with the application. It uses the website’s paw icon for the app and native installers. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
 
+## Updates
+
+From version 1.3.0, the installed app checks on startup and every six hours. Choose **Update & restart** when convenient; Settings also has **Check updates**. Mappings and connection settings are kept. No Python or separate updater installation is required. An unsigned older app needs one manual upgrade to get this feature.
+
+The updater verifies an Ed25519-signed release manifest and the exact package size and SHA-256 before installation. Update downloads contain only the app and come from the fixed Mid’s Den update service, independently of your measurement server setting. Windows uses its per-user installer; Linux replaces its executable; macOS replaces the app bundle. Keep the Linux executable or macOS app in a writable location (not inside the mounted DMG). The app stays open if the updater cannot start. Installation results and logs are stored beside your settings under `updates`.
+
+Release publishing happens on the website host after native builds and installer checks pass. Run `node companion/publish-update.cjs <verified-artifact-directory> <data-directory> <build-number> <attempt>` there; the private signing key remains in the host user’s private application data directory, outside this repository and GitHub Actions. Versioned packages are immutable, and the feed is published atomically after all four packages exist. Keep a secure backup of the signing key; key rotation requires an app release trusting the new key first.
+
 The included runtime is CPython 3.13.18 from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110). Its original license and notices are included with each runtime.
 
 The companion reads measurement names, units, current values and starting values. It does not use the dashboard password or read the ledger. OSCQuery discovery uses local mDNS; it does not need an OSC receive port. It sends OSC only to this computer or a private IP you enter. Network isolation can block local OSC traffic.

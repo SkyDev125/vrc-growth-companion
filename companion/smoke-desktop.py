@@ -17,7 +17,7 @@ else:
     binary = out / 'MidsDenCompanion'
 with tempfile.TemporaryDirectory() as directory:
     report = Path(directory) / 'report.json'
-    env = dict(os.environ, MIDSDEN_SMOKE_REPORT=str(report))
+    env = dict(os.environ, MIDSDEN_SMOKE_REPORT=str(report), MIDSDEN_DISABLE_UPDATE_CHECKS='1')
     subprocess.run([str(binary), '--self-test'], env=env, check=True, timeout=90)
     result = json.loads(report.read_text(encoding='utf-8'))
     assert result == {'status': 'ok', 'platform': sys.platform}, result
@@ -65,6 +65,27 @@ with tempfile.TemporaryDirectory() as directory:
         new_app=start_running(1)
         upgrade_running(new_app)
         subprocess.run([str(installed),'--self-test'],env=app_env,check=True,timeout=90)
+        # Exercise the updater's real external PowerShell -> setup -> restart handoff.
+        sys.path.insert(0,str(Path(__file__).parent))
+        import updater
+        new_app=start_running(1)
+        report.unlink(missing_ok=True)
+        saved_env=dict(os.environ)
+        try:
+            os.environ.update(app_env)
+            helper=updater.launch_helper(setup,installed,Path(directory)/'update cache',new_app.pid,restart_self_test=True)
+        finally:
+            os.environ.clear();os.environ.update(saved_env)
+        subprocess.run(['powershell.exe','-NoProfile','-Command',
+            '(Get-Process -Id '+str(new_app.pid)+').CloseMainWindow() | Out-Null'],check=True)
+        new_app.wait(timeout=30)
+        assert helper.wait(timeout=240)==0
+        deadline=time.monotonic()+90
+        while not report.exists() and time.monotonic()<deadline:time.sleep(.2)
+        assert json.loads(report.read_text())['status']=='ok'
+        assert (Path(directory)/'update cache/install-result.txt').read_text(encoding='utf-8-sig').strip()=='ok'
+        assert json.loads((config_dir/'config.json').read_text())['oscPort']==19000
+        time.sleep(2) # Let the self-test window and runtime exit before uninstalling.
         subprocess.run([str(install_dir/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'],check=True,timeout=90)
         print('Windows: two-process legacy upgrade, single-process new app, running-app upgrade, and uninstall passed')
     elif sys.platform == 'darwin':
@@ -80,3 +101,28 @@ with tempfile.TemporaryDirectory() as directory:
             from macos_image import run_image_tool
             run_image_tool(['detach',str(mount)],force_detach=True)
         print('macOS app launches from mounted DMG')
+    if sys.platform != 'win32':
+        # Install over a disposable native app, then launch its frozen self-test.
+        sys.path.insert(0,str(Path(__file__).parent))
+        import updater
+        if sys.platform=='darwin':
+            target=Path(directory)/'installed/MidsDenCompanion.app'
+            shutil.copytree(out/'MidsDenCompanion.app',target,symlinks=True)
+            package=out/'mids-den-companion-macos.dmg'
+        else:
+            target=Path(directory)/'installed companion';shutil.copy2(binary,target)
+            package=binary
+        report.unlink(missing_ok=True)
+        old=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'])
+        saved_env=dict(os.environ)
+        try:
+            os.environ.update(env)
+            helper=updater.launch_helper(package,target,Path(directory)/'update cache',old.pid,restart_self_test=True)
+            old.terminate();old.wait(timeout=10)
+            assert helper.wait(timeout=180)==0, (Path(directory)/'update cache/install.log').read_text()
+            assert json.loads(report.read_text())['status']=='ok'
+            assert (Path(directory)/'update cache/install-result.txt').read_text().strip()=='ok'
+        finally:
+            os.environ.clear();os.environ.update(saved_env)
+            if old.poll() is None:old.kill();old.wait()
+        print('Native updater replacement and restarted frozen app passed:',sys.platform)

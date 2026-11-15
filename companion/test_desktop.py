@@ -60,6 +60,16 @@ class DesktopTests(unittest.TestCase):
   self.assertEqual(self.window.saveConnection('127.0.0.1','9010'),'')
   self.assertEqual(self.window.config['oscPort'],9010)
   self.window.resend();self.assertEqual(self.window.resend_generation,1)
+ def test_updates_work_while_syncing_is_paused(self):
+  self.window.stop_event.set();self.window.paused=True
+  self.window.updates.events.put(('checked',{'version':'1.3.0'}))
+  self.window.updates.drain()
+  state=json.loads(self.window.stateJson)
+  self.assertTrue(state['paused']);self.assertTrue(state['update']['available'])
+  self.assertFalse(state['update']['busy'])
+  self.window.updates.events.put(('error','Download failed; please retry'))
+  self.window.updates.drain()
+  self.assertIn('retry',json.loads(self.window.stateJson)['update']['message'])
  def test_worker_sends_changes_avatar_switch_and_reconnect_only(self):
   import avatar_mapping as m
   a={'avatar':'avtr_a','queryPort':9001,'parameters':{}}

@@ -14,6 +14,7 @@ from PySide6.QtQuick import QQuickWindow,QSGRendererInterface
 import vrchat_companion as core
 import avatar_mapping as mapping
 from measurement_format import format_measurement
+from update_controller import UpdateController
 
 
 def settings_path():
@@ -37,6 +38,9 @@ class CompanionWindow(QObject):
         try:self.config=core.load_config(settings_path())
         except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
         mapping.migrate_profiles(self.config)
+        self.updates=UpdateController(settings_path().parent/'updates',
+            enabled=auto_start and not os.environ.get('MIDSDEN_DISABLE_UPDATE_CHECKS'),parent=self)
+        self.updates.changed.connect(self.stateChanged)
         self.timer=QTimer(self);self.timer.timeout.connect(self.drain);self.timer.start(100)
         if auto_start:self.start()
 
@@ -63,7 +67,14 @@ class CompanionWindow(QObject):
                 'target':'Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX),
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
-            'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort']})
+            'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
+            'update':self.updates.state})
+
+    @Slot()
+    def checkUpdates(self):self.updates.check()
+
+    @Slot()
+    def installUpdate(self):self.updates.install()
 
     @Property(str,notify=editorChanged)
     def editorJson(self):
@@ -166,7 +177,7 @@ class CompanionWindow(QObject):
                     self.editor_error='Avatar changed. Reopen this mapping before saving.'
         if changed:self.stateChanged.emit()
 
-    def close(self):self.stop_event.set();self.timer.stop()
+    def close(self):self.stop_event.set();self.timer.stop();self.updates.close()
 
     def sync(self, stop):
         last_browse = 0
@@ -263,6 +274,8 @@ def main():
     app.aboutToQuit.connect(controller.close)
     if smoke:
         import ssl,zeroconf
+        import updater
+        updater.verify_manifest(json.loads((updater.resources()/'verification-fixture.json').read_text()))
         ssl.create_default_context();core.encode_eyeheight_packet(1000)
         if sys.platform=='win32':
             from ctypes import wintypes

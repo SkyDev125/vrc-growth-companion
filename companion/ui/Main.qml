@@ -100,6 +100,16 @@ ApplicationWindow {
                     ActionButton { text: window.state.paused ? "Resume" : "Pause"; onClicked: bridge.toggleRun() }
                 }
                 Rectangle {
+                    visible: window.state.update.available || window.state.update.busy
+                    Layout.fillWidth: true; implicitHeight: 54
+                    radius: 10; color: "#273027"; border.color: "#48513d"
+                    RowLayout {
+                        anchors.fill: parent; anchors.margins: 10; spacing: 12
+                        Text { text: window.state.update.message + (window.state.update.progress >= 0 ? " " + window.state.update.progress + "%" : ""); color: "#dfe7d5"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                        ActionButton { objectName: "installUpdate"; text: "Update & restart"; primary: true; enabled: !window.state.update.busy; onClicked: bridge.installUpdate() }
+                    }
+                }
+                Rectangle {
                     Layout.fillWidth: true; Layout.preferredHeight: 39
                     radius: 10; color: "#17222c"; border.color: "#263947"
                     RowLayout {
@@ -325,6 +335,13 @@ ApplicationWindow {
                 ActionButton { text: "Cancel"; quiet: true; onClicked: settings.close() }
                 ActionButton { text: "Save connection"; primary: true; onClicked: { window.connectionError = bridge.saveConnection(hostInput.text,portInput.text); if (!window.connectionError) settings.close() } }
             }
+            Rectangle { Layout.fillWidth: true; height: 1; color: "#303b4a" }
+            RowLayout {
+                Layout.fillWidth: true
+                SmallText { text: "Version " + window.state.update.version; Layout.fillWidth: true }
+                ActionButton { objectName: "checkUpdates"; text: "Check updates"; quiet: true; enabled: !window.state.update.busy; onClicked: bridge.checkUpdates() }
+            }
+            Text { text: window.state.update.message; visible: text.length > 0; color: "#acb8c5"; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
         }
     }
 }

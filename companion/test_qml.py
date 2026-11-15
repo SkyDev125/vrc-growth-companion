@@ -109,6 +109,15 @@ class QuickInterfaceTests(unittest.TestCase):
   self.assertIsNone(self.root.findChild(QObject,'minimizeWindow'))
   self.assertIsNone(self.root.findChild(QObject,'maximizeWindow'))
   self.assertIsNone(self.root.findChild(QObject,'closeWindow'))
+ def test_update_banner_and_controls(self):
+  self.bridge.updates.notify(available=True,message='Update available · 1.3.0')
+  QTest.qWait(50)
+  button=self.root.findChild(QObject,'installUpdate')
+  self.assertTrue(button.property('visible'));self.assertTrue(button.property('enabled'))
+  self.bridge.updates.notify(busy=True,progress=50,message='Downloading update…')
+  QTest.qWait(50)
+  self.assertFalse(button.property('enabled'))
+  self.assertEqual(self.evaluate(self.root,'state.update.progress'),50)
  def test_mouse_focus_has_no_gold_outline_but_keyboard_focus_does(self):
   settings=self.root.findChild(QObject,'connectionSettings')
   self.root.requestActivate();QTest.qWait(50)

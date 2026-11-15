@@ -1,6 +1,9 @@
+#ifndef AppVersion
+#define AppVersion "1.3.0"
+#endif
 [Setup]
 AppName=Mid's Den Companion
-AppVersion=1.2.3
+AppVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\MidsDenCompanion
 DefaultGroupName=Mid's Den Companion
 PrivilegesRequired=lowest
