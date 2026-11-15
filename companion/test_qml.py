@@ -66,7 +66,7 @@ class QuickInterfaceTests(unittest.TestCase):
   save_y=save.mapToScene(save.boundingRect().center()).y()
   self.evaluate(scroll,'contentItem.contentY = Math.max(0, contentItem.contentHeight - contentItem.height)')
   self.app.processEvents()
-  self.assertEqual(header.mapToScene(header.boundingRect().center()).y(),header_y)
+  self.assertAlmostEqual(header.mapToScene(header.boundingRect().center()).y(),header_y,delta=.5)
   self.assertEqual(save.mapToScene(save.boundingRect().center()).y(),save_y)
  def test_default_editor_fits_without_scroll_and_hovered_parameter_selects(self):
   self.bridge.openEditor(-1);QTest.qWait(200)

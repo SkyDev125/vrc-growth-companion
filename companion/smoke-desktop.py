@@ -75,6 +75,9 @@ with tempfile.TemporaryDirectory() as directory:
             os.environ.update(app_env)
             os.environ.update(_PYI_ARCHIVE_FILE=str(installed), _PYI_APPLICATION_HOME_DIR=str(Path(directory)/'removed runtime'), _PYI_PARENT_PROCESS_LEVEL='1')
             helper=updater.launch_helper(setup,installed,Path(directory)/'update cache',new_app.pid,restart_self_test=True)
+        except Exception:
+            new_app.kill();new_app.wait(timeout=15)
+            raise
         finally:
             os.environ.clear();os.environ.update(saved_env)
         subprocess.run(['powershell.exe','-NoProfile','-Command',

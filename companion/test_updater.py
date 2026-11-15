@@ -66,6 +66,20 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(updater.verify_manifest(fixture)['schema'], 1)
         with self.assertRaises(ValueError): updater.NoRedirect().redirect_request(None,None,302,'',{},'https://other.invalid')
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows PowerShell helper')
+    def test_windows_helper_ready_handshake_before_app_exit(self):
+        with tempfile.TemporaryDirectory(prefix='update paths with spaces ') as directory:
+            root=Path(directory)
+            old=subprocess.Popen([sys.executable,'-c','import time;time.sleep(90)'])
+            helper=None
+            try:
+                helper=updater.launch_helper(root/'not-used-yet.exe',Path(sys.executable),root/'cache',old.pid)
+                self.assertIsNone(old.poll())
+                self.assertIsNone(helper.poll())
+            finally:
+                if helper is not None and helper.poll() is None:helper.terminate();helper.wait(timeout=10)
+                if old.poll() is None:old.kill();old.wait(timeout=10)
+
     @unittest.skipUnless(sys.platform == 'linux', 'Linux executable replacement')
     def test_linux_helper_waits_replaces_restarts_and_preserves_userdata(self):
         with tempfile.TemporaryDirectory(prefix='update paths with spaces ') as directory:

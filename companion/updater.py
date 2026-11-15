@@ -150,7 +150,7 @@ def launch_helper(package, target, directory, pid=None, restart_self_test=False)
     helper.write_bytes((resources() / ('install.' + suffix)).read_bytes())
     if sys.platform == 'win32':
         command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(helper)]
-        options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS}
+        options = {'creationflags': subprocess.CREATE_NO_WINDOW}
     else:
         command = ['/bin/sh', str(helper), sys.platform]
         options = {'start_new_session': True}
@@ -166,7 +166,9 @@ def launch_helper(package, target, directory, pid=None, restart_self_test=False)
             process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **options)
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        if process.poll() is not None: raise RuntimeError('The updater could not start. See ' + str(directory / 'install.log'))
+        if process.poll() is not None:
+            detail = (directory / 'install.log').read_text(encoding='utf-8', errors='replace')[-3000:]
+            raise RuntimeError('The updater could not start. ' + detail + '\nSee ' + str(directory / 'install.log'))
         if ready.exists(): return process
         time.sleep(.05)
     process.terminate()
