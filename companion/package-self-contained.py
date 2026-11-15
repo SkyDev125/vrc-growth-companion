@@ -37,6 +37,7 @@ APP_FILES = (
     "start-companion-windows.ps1",
     "start-companion.sh",
     "vrchat_companion.py",
+    "growth_options.py",
     "desktop.py",
     "avatar_mapping.py",
     "measurement_format.py",

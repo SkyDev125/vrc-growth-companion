@@ -19,6 +19,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 
 from measurement_format import format_measurement
+from growth_options import normalize as growth_options
 
 DEFAULT_URL = "https://mid.shardware.net"
 DEFAULT_POLL_SECONDS = 5
@@ -92,6 +93,7 @@ def load_config(path: Path | None = None) -> dict:
     config = {"serverUrl": base_url, "oscHost": osc_host, "oscPort": port,
               "oscQueryPort": query_port}
     config['profiles'] = data.get('profiles', {}) if isinstance(data.get('profiles'), dict) else {}
+    config['growthOptions'] = growth_options(data.get('growthOptions'))
     config['smoothGrowth'] = data.get('smoothGrowth',False) is True
     config['syncHeight'] = data.get('syncHeight', True) is True
     config['mappingVersion'] = data.get('mappingVersion', 0)
@@ -127,6 +129,7 @@ def configure(path: Path | None = None, ask_server_url: bool = True) -> Path:
         "oscQueryPort": int(current.get("oscQueryPort", 9001)),
     }
     config['profiles'] = current.get('profiles', {}) if isinstance(current.get('profiles'), dict) else {}
+    config['growthOptions'] = growth_options(current.get('growthOptions'))
     config['smoothGrowth'] = current.get('smoothGrowth',False) is True
     config['syncHeight'] = current.get('syncHeight', True) is True
     config['mappingVersion'] = current.get('mappingVersion', 0)

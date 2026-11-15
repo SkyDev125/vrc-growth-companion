@@ -4,18 +4,20 @@ import math
 import threading
 import time
 import avatar_mapping as mapping
+from growth_options import normalize
 
 
-def duration(start, end):
+def duration(start, end, options=None):
     if start == end: return 0.
     distance = abs(math.log2(end / start)) if start > 0 and end > 0 else abs(end-start)/max(abs(start),abs(end),1.)
-    return min(120., max(3., 3. + 8.*distance))
+    settings=normalize(options)
+    return min(settings['maxDuration'],max(.5,(3.+8.*distance)/settings['speed']))
 
 
-def blend(start, end, progress):
+def blend(start, end, progress, curve='gentle'):
     if progress >= 1: return end
     if progress <= 0: return start
-    u=progress**3*(10+progress*(-15+6*progress))
+    u=progress if curve=='steady' else 1-(1-progress)**3 if curve=='quickStart' else progress**3*(10+progress*(-15+6*progress))
     return math.exp(math.log(start)+(math.log(end)-math.log(start))*u) if start > 0 and end > 0 else start+(end-start)*u
 
 
@@ -33,7 +35,7 @@ def links(sources):
 
 class Transition:
     def __init__(self):
-        self.targets=[];self.starts={};self.ends={};self.started=0.;self.seconds=0.
+        self.targets=[];self.starts={};self.ends={};self.started=0.;self.seconds=0.;self.options=normalize()
 
     def values(self, now):
         if not self.targets:return []
@@ -41,19 +43,20 @@ class Transition:
         by_id,parents=links(self.targets);values={}
         def evaluate(key):
             if key in values:return values[key]
-            source=by_id[key];value=blend(self.starts[key],self.ends[key],u)
+            source=by_id[key];value=blend(self.starts[key],self.ends[key],u,self.options['curve'])
             parent=parents[key]
             if parent in by_id:
                 value*= (evaluate(parent)/by_id[parent]['originalValue'])**int(source.get('syncPower',1))
             values[key]=value;return value
         return [{**s,'value':s['value'] if u>=1 else evaluate(s['id'])} for s in self.targets]
 
-    def update(self, sources, now, initial_height=None, animated_ids=None):
+    def update(self, sources, now, initial_height=None, animated_ids=None, options=None):
         sources=copy.deepcopy(sources)
         try:by_id,parents=links(sources)
         except ValueError:
             sources=[{**s,'syncTarget':'none'} for s in sources];by_id,parents=links(sources)
-        if sources==self.targets:return
+        settings=normalize(options)
+        if sources==self.targets and settings==self.options:return
         previous={s['id']:s for s in self.values(now)}
         if not previous and initial_height is not None:
             previous={s['id']:dict(s) for s in sources}
@@ -75,12 +78,12 @@ class Transition:
                 old_parent=previous.get(parent,by_id[parent])
                 start/= (old_parent['value']/by_id[parent]['originalValue'])**power
             self.starts[key]=start;self.ends[key]=end
-        self.targets=sources;self.started=now
+        self.targets=sources;self.started=now;self.options=settings
         relevant=set(self.ends) if animated_ids is None else set(animated_ids)
         for key in list(relevant):
             parent=parents.get(key)
             while parent in by_id:relevant.add(parent);parent=parents.get(parent)
-        self.seconds=max((duration(self.starts[k],self.ends[k]) for k in relevant if k in self.ends),default=0.)
+        self.seconds=max((duration(self.starts[k],self.ends[k],self.options) for k in relevant if k in self.ends),default=0.)
 
     def finish(self):self.seconds=0.
     def active(self,now):return self.seconds>0 and now<self.started+self.seconds
@@ -115,7 +118,7 @@ class MotionSender:
             self.config=config;self.items=copy.deepcopy(items);self.discovery=discovery;self.epoch=self.owner.motion_epoch
             raw={s['id']:s for s in sources}
             animated={i['source'] for i in items if i.get('enabled',True) and wants_smoothing(i,raw,config.get('smoothGrowth',False))}
-            self.transition.update(sources,now,(discovery or {}).get('eyeHeight'),animated)
+            self.transition.update(sources,now,(discovery or {}).get('eyeHeight'),animated,config.get('growthOptions'))
             self.tick(now)
 
     def tick(self, now):
@@ -124,6 +127,9 @@ class MotionSender:
             live=copy.deepcopy(self.owner.config);epoch=self.owner.motion_epoch;finish=self.owner.finish_generation
         if epoch!=self.epoch or (live['oscHost'],live['oscPort'])!=self.context[:2]:self.clear();return
         raw={s['id']:s for s in self.transition.targets}
+        if normalize(live.get('growthOptions'))!=self.transition.options:
+            animated={i['source'] for i in self.items if i.get('enabled',True) and wants_smoothing(i,raw,live.get('smoothGrowth',False))}
+            self.transition.update(self.transition.targets,now,animated_ids=animated,options=live.get('growthOptions'))
         if not live.get('smoothGrowth',False):self.transition.finish()
         if finish!=self.finish_generation:self.transition.finish();self.finish_generation=finish
         displayed={s['id']:s for s in self.transition.values(now)}

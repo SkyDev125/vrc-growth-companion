@@ -3,6 +3,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import smooth_growth as g
 import avatar_mapping as m
+from growth_options import normalize
 
 
 def sources(height,diameter=1):
@@ -12,6 +13,38 @@ def sources(height,diameter=1):
 
 
 class GrowthTests(unittest.TestCase):
+    def test_preferences_validate_and_legacy_defaults_keep_original_feel(self):
+        self.assertEqual(normalize(),{'speed':1.,'curve':'gentle','maxDuration':120.})
+        for bad in ({'speed':0},{'speed':float('nan')},{'maxDuration':121},{'maxDuration':True},{'curve':'unknown'}):
+            with self.assertRaises(ValueError):normalize(bad,strict=True)
+            self.assertEqual(normalize(bad),normalize())
+        self.assertEqual(g.duration(1,2),11)
+        self.assertEqual(g.duration(1,2,{'speed':2}),5.5)
+        self.assertEqual(g.duration(1,1000,{'speed':.25,'maxDuration':30}),30)
+
+    def test_all_curves_are_monotone_exact_and_preserve_cubic_links(self):
+        samples={}
+        for curve in ('gentle','steady','quickStart'):
+            values=[g.blend(1,100,i/100,curve) for i in range(101)]
+            self.assertEqual(values[0],1);self.assertEqual(values[-1],100)
+            self.assertTrue(all(a<=b for a,b in zip(values,values[1:])))
+            samples[curve]=values[25]
+            t=g.Transition();t.update(sources(1),0);t.update(sources(4),1,options={'curve':curve,'speed':2,'maxDuration':30})
+            for frame in range(51):
+                data={s['id']:s['value'] for s in t.values(1+t.seconds*frame/50)}
+                self.assertAlmostEqual(data['capacity'],data['diameter']**3,places=8)
+        self.assertLess(samples['gentle'],samples['steady'])
+        self.assertLess(samples['steady'],samples['quickStart'])
+
+    def test_live_preference_change_keeps_current_size_and_settled_state(self):
+        t=g.Transition();t.update(sources(1),0);t.update(sources(100),1)
+        before=t.values(5)
+        t.update(sources(100),5,options={'speed':4,'curve':'quickStart','maxDuration':15})
+        for a,b in zip(before,t.values(5)):self.assertAlmostEqual(a['value'],b['value'])
+        self.assertLessEqual(t.seconds,15)
+        t.finish();t.update(sources(100),6,options={'speed':.5})
+        self.assertFalse(t.active(6));self.assertEqual(t.values(6),sources(100))
+
     def test_bounded_proportional_timing_and_eased_exact_endpoint(self):
         self.assertAlmostEqual(g.duration(2,4),g.duration(200,400))
         self.assertLess(g.duration(2,2.1),g.duration(2,20))

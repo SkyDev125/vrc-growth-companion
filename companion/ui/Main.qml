@@ -19,6 +19,7 @@ ApplicationWindow {
     property var draft: ({})
     property string editError: ""
     property string connectionError: ""
+    property string growthError: ""
     property int draftIndex: -1
     ListModel { id: mappingModel }
     function updateState() {
@@ -30,6 +31,11 @@ ApplicationWindow {
             for (var i = 0; i < state.rows.length; ++i) mappingModel.set(i, state.rows[i])
         }
         if (editor.visible && editorData.profile !== state.profile) editError = "Avatar changed. Reopen this mapping before saving."
+    }
+    function saveGrowth(key,value) {
+        var options=Object.assign({},state.growthOptions)
+        options[key]=value
+        growthError=bridge.saveGrowthOptions(JSON.stringify(options))
     }
     function loadEditor() {
         editorData = JSON.parse(bridge.editorJson)
@@ -322,13 +328,26 @@ ApplicationWindow {
     }
     Popup {
         id: settings
-        anchors.centerIn: parent; width: 410; padding: 24; modal: true; focus: true
+        objectName:"settingsPopup"
+        height:Math.min(settingsLayout.implicitHeight+48,window.height-40)
+        anchors.centerIn: parent; width: 430; padding: 24; modal: true; focus: true
         closePolicy: Popup.CloseOnEscape
         background: Rectangle { radius: 18; color: "#18212d"; border.color: "#405067" }
         Overlay.modal: Rectangle { color: "#a6080d15" }
         contentItem: ColumnLayout {
+            id:settingsLayout
             spacing: 12
             Text { text: "Settings"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
+            ScrollView {
+                id:settingsScroll
+                objectName:"settingsScroll"
+                Layout.fillWidth:true; Layout.fillHeight:true; Layout.minimumHeight:0
+                implicitHeight:settingsFields.implicitHeight
+                contentWidth:availableWidth;clip:true
+                ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+                ColumnLayout {
+                    id:settingsFields
+                    width:settingsScroll.availableWidth;spacing:12
             RowLayout {
                 Layout.fillWidth:true
                 FieldLabel { text:"Growth" }
@@ -338,17 +357,56 @@ ApplicationWindow {
                     onActivated:bridge.setSmoothGrowth(currentValue)
                 }
             }
-            SmallText { text:"Smooth is experimental · finishes within 2 minutes" }
+            ColumnLayout {
+                Layout.fillWidth:true;spacing:10;visible:window.state.smoothGrowth
+                RowLayout {
+                    Layout.fillWidth:true
+                    FieldLabel { text:"Pace" }
+                    SelectField { objectName:"growthPace";Layout.preferredWidth:180
+                        model:[{label:"Very slow · ¼×",value:0.25},{label:"Slow · ½×",value:0.5},{label:"Normal",value:1},{label:"Fast · 2×",value:2},{label:"Very fast · 4×",value:4}]
+                        currentIndex:[0.25,0.5,1,2,4].indexOf(window.state.growthOptions.speed)
+                        onActivated:window.saveGrowth("speed",currentValue)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth:true
+                    FieldLabel { text:"Curve" }
+                    SelectField { objectName:"growthCurve";Layout.preferredWidth:180
+                        model:[{label:"Gentle",value:"gentle"},{label:"Steady",value:"steady"},{label:"Quick start",value:"quickStart"}]
+                        currentIndex:["gentle","steady","quickStart"].indexOf(window.state.growthOptions.curve)
+                        onActivated:window.saveGrowth("curve",currentValue)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth:true
+                    FieldLabel { text:"Maximum duration" }
+                    InputField { id:growthMaximum;objectName:"growthMaximum";Layout.preferredWidth:70
+                        text:String(window.state.growthOptions.maxDuration)
+                        validator:IntValidator {bottom:3;top:120}
+                        onTextEdited:window.growthError=acceptableInput ? "" : "Use 3–120 seconds."
+                        onEditingFinished:window.saveGrowth("maxDuration",Number(text))
+                    }
+                    SmallText {text:"seconds"}
+                }
+                RowLayout {
+                    Layout.fillWidth:true
+                    SmallText {text:"Changes apply immediately";Layout.fillWidth:true}
+                    ActionButton {objectName:"resetGrowth";text:"Reset";quiet:true;onClicked:{window.growthError=bridge.saveGrowthOptions("{}");growthMaximum.text=String(window.state.growthOptions.maxDuration)}}
+                }
+                Text {text:window.growthError;color:"#f1a49c";visible:text.length>0;Layout.fillWidth:true;wrapMode:Text.WordWrap;font.pixelSize:12}
+            }
             FieldLabel { text: "VRChat IP address" }
             InputField { id: hostInput; Layout.fillWidth: true }
             FieldLabel { text: "OSC receive port" }
             InputField { id: portInput; Layout.fillWidth: true }
+                }
+            }
             Text { text: window.connectionError; color: "#f1a49c"; visible: text.length > 0; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 ActionButton { text: "Cancel"; quiet: true; onClicked: settings.close() }
-                ActionButton { text: "Save connection"; primary: true; onClicked: { window.connectionError = bridge.saveConnection(hostInput.text,portInput.text); if (!window.connectionError) settings.close() } }
+                ActionButton { objectName:"saveConnection"; text: "Save connection"; primary: true; onClicked: { window.connectionError = bridge.saveConnection(hostInput.text,portInput.text); if (!window.connectionError) settings.close() } }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#303b4a" }
             RowLayout {

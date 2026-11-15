@@ -16,6 +16,7 @@ import avatar_mapping as mapping
 from measurement_format import format_measurement
 from update_controller import UpdateController
 from smooth_growth import MotionSender
+from growth_options import normalize as growth_options
 
 
 def settings_path():
@@ -75,7 +76,7 @@ class CompanionWindow(QObject):
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
             'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
-            'update':self.updates.state,'smoothGrowth':self.config.get('smoothGrowth',False),'motion':self.motion})
+            'update':self.updates.state,'smoothGrowth':self.config.get('smoothGrowth',False),'growthOptions':growth_options(self.config.get('growthOptions')),'motion':self.motion})
 
     @Slot()
     def checkUpdates(self):self.updates.check()
@@ -164,6 +165,21 @@ class CompanionWindow(QObject):
     def setSmoothGrowth(self,enabled):
         with self.lock:self.config['smoothGrowth']=enabled
         self.persist();self.stateChanged.emit()
+
+    @Slot(str,result=str)
+    def saveGrowthOptions(self,raw):
+        try:
+            options=growth_options(json.loads(raw),strict=True)
+            with self.lock:
+                previous=self.config.get('growthOptions')
+                self.config['growthOptions']=options
+                try:core.save_config(self.config,settings_path())
+                except OSError:
+                    if previous is None:self.config.pop('growthOptions',None)
+                    else:self.config['growthOptions']=previous
+                    raise
+            self.stateChanged.emit();return ''
+        except (OSError,ValueError,TypeError) as error:return str(error)
 
     @Slot()
     def finishGrowth(self):

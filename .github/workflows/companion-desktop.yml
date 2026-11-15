@@ -7,6 +7,7 @@ on:
       - companion/measurement-units.json
       - companion/measurement-examples.json
       - .github/workflows/companion-desktop.yml
+      - companion/growth_options.py
       - companion/smooth_growth.py
       - companion/avatar_mapping.py
       - companion/ui/**

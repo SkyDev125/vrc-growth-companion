@@ -75,6 +75,15 @@ class DesktopTests(unittest.TestCase):
   self.window.setSmoothGrowth(True)
   self.assertTrue(desktop.core.load_config(Path(self.temp.name)/'config.json')['smoothGrowth'])
   self.window.finishGrowth();self.assertEqual(self.window.finish_generation,1)
+ def test_growth_preferences_persist_validate_and_rollback_on_write_failure(self):
+  options={'speed':2,'curve':'steady','maxDuration':30}
+  self.assertEqual(self.window.saveGrowthOptions(json.dumps(options)),'')
+  self.assertEqual(desktop.core.load_config(Path(self.temp.name)/'config.json')['growthOptions'],options)
+  self.assertNotEqual(self.window.saveGrowthOptions('{"speed":0}'),'')
+  self.assertEqual(self.window.config['growthOptions'],options)
+  with patch.object(desktop.core,'save_config',side_effect=OSError('disk unavailable')):
+   self.assertIn('disk unavailable',self.window.saveGrowthOptions('{}'))
+  self.assertEqual(self.window.config['growthOptions'],options)
  def test_worker_sends_changes_avatar_switch_and_reconnect_only(self):
   import avatar_mapping as m
   a={'avatar':'avtr_a','queryPort':9001,'parameters':{}}
