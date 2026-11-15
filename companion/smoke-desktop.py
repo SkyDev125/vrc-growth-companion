@@ -73,6 +73,7 @@ with tempfile.TemporaryDirectory() as directory:
         saved_env=dict(os.environ)
         try:
             os.environ.update(app_env)
+            os.environ.update(_PYI_ARCHIVE_FILE=str(installed), _PYI_APPLICATION_HOME_DIR=str(Path(directory)/'removed runtime'), _PYI_PARENT_PROCESS_LEVEL='1')
             helper=updater.launch_helper(setup,installed,Path(directory)/'update cache',new_app.pid,restart_self_test=True)
         finally:
             os.environ.clear();os.environ.update(saved_env)
@@ -117,6 +118,8 @@ with tempfile.TemporaryDirectory() as directory:
         saved_env=dict(os.environ)
         try:
             os.environ.update(env)
+            restart_binary=target/'Contents/MacOS/MidsDenCompanion' if sys.platform=='darwin' else target
+            os.environ.update(_PYI_ARCHIVE_FILE=str(restart_binary), _PYI_APPLICATION_HOME_DIR=str(Path(directory)/'removed runtime'), _PYI_PARENT_PROCESS_LEVEL='1')
             helper=updater.launch_helper(package,target,Path(directory)/'update cache',old.pid,restart_self_test=True)
             old.terminate();old.wait(timeout=10)
             assert helper.wait(timeout=180)==0, (Path(directory)/'update cache/install.log').read_text()

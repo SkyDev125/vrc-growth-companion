@@ -136,6 +136,13 @@ def launch_helper(package, target, directory, pid=None, restart_self_test=False)
     env = dict(os.environ, MIDSDEN_UPDATE_PACKAGE=str(package.resolve()), MIDSDEN_UPDATE_TARGET=str(target.resolve()),
                MIDSDEN_UPDATE_PID=str(pid or os.getpid()), MIDSDEN_UPDATE_READY=str(ready),
                MIDSDEN_UPDATE_RESULT=str(result))
+    # A one-file restart must extract the NEW app, never reuse the old bootloader's runtime.
+    env['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
+    # External OS tools must use system libraries, not our bundled Qt/OpenSSL libraries.
+    if sys.platform == 'linux':
+        original = env.pop('LD_LIBRARY_PATH_ORIG', None)
+        if original is None: env.pop('LD_LIBRARY_PATH', None)
+        else: env['LD_LIBRARY_PATH'] = original
     if restart_self_test: env['MIDSDEN_UPDATE_SELF_TEST'] = '1'
     # Copy helpers out of the frozen app's temporary extraction folder before it exits.
     suffix = 'ps1' if sys.platform == 'win32' else 'sh'
@@ -148,7 +155,15 @@ def launch_helper(package, target, directory, pid=None, restart_self_test=False)
         command = ['/bin/sh', str(helper), sys.platform]
         options = {'start_new_session': True}
     with (directory / 'install.log').open('wb') as log:
-        process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **options)
+        if sys.platform == 'win32':
+            import ctypes
+            buffer = ctypes.create_unicode_buffer(32768)
+            ctypes.windll.kernel32.GetDllDirectoryW(len(buffer), buffer)
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+            try: process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **options)
+            finally: ctypes.windll.kernel32.SetDllDirectoryW(buffer.value or None)
+        else:
+            process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **options)
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         if process.poll() is not None: raise RuntimeError('The updater could not start. See ' + str(directory / 'install.log'))
