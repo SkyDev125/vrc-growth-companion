@@ -23,7 +23,7 @@ Button {
     background: Rectangle {
         radius: 9
         color: control.primary ? (control.down ? "#c4aa72" : control.hovered ? "#f0d9a7" : "#e0c48c") : control.down ? "#303b48" : control.hovered ? "#27313d" : control.quiet ? "transparent" : "#1c2530"
-        border.color: control.activeFocus ? "#e0c48c" : control.primary || control.quiet ? "transparent" : "#303c4a"
+        border.color: control.visualFocus ? "#e0c48c" : control.primary || control.quiet ? "transparent" : "#303c4a"
         Behavior on color { ColorAnimation { duration: 120 } }
     }
     Accessible.name: text

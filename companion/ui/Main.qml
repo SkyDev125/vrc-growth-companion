@@ -86,12 +86,12 @@ ApplicationWindow {
                 Layout.fillWidth: true; Layout.preferredHeight: 34
                 MouseArea { anchors.fill: parent; onPressed: window.startSystemMove(); onDoubleClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized() }
                 RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 5
+                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 4; spacing: 0
                     SmallText { text: "MID’S DEN / COMPANION"; color: "#8190a3"; font.pixelSize: 10; font.letterSpacing: 1 }
                     Item { Layout.fillWidth: true }
-                    ActionButton { text: "−"; quiet: true; width: 36; height: 26; onClicked: window.showMinimized(); Accessible.name: "Minimize" }
-                    ActionButton { text: "□"; quiet: true; width: 36; height: 26; onClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized(); Accessible.name: "Maximize or restore" }
-                    ActionButton { text: "×"; quiet: true; danger: true; width: 36; height: 26; onClicked: window.close(); Accessible.name: "Close companion" }
+                    CaptionButton { objectName: "minimizeWindow"; captionAction: "minimize"; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.showMinimized() }
+                    CaptionButton { objectName: "maximizeWindow"; captionAction: "maximize"; maximized: window.visibility === Window.Maximized; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized() }
+                    CaptionButton { objectName: "closeWindow"; captionAction: "close"; Layout.preferredWidth: 44; Layout.preferredHeight: 32; Layout.maximumHeight: 32; onClicked: window.close() }
                 }
             }
             ColumnLayout {
@@ -108,7 +108,7 @@ ApplicationWindow {
                     }
                     Item { Layout.fillWidth: true }
                     ActionButton { text: "Resend"; quiet: true; enabled: !window.state.paused; onClicked: bridge.resend(); ToolTip.visible: hovered; ToolTip.text: "Apply the current values once again" }
-                    ActionButton { text: "Settings"; quiet: true; onClicked: { hostInput.text = window.state.host; portInput.text = String(window.state.port); window.connectionError = ""; settings.open() } }
+                    ActionButton { objectName: "connectionSettings"; text: "Settings"; quiet: true; onClicked: { hostInput.text = window.state.host; portInput.text = String(window.state.port); window.connectionError = ""; settings.open() } }
                     ActionButton { text: window.state.paused ? "Resume" : "Pause"; onClicked: bridge.toggleRun() }
                 }
                 Rectangle {
