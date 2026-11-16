@@ -381,7 +381,13 @@ ApplicationWindow {
                     Layout.fillWidth:true
                     FieldLabel { text:"Maximum duration" }
                     InputField { id:growthMaximum;objectName:"growthMaximum";Layout.preferredWidth:70
-                        text:String(window.state.growthOptions.maxDuration)
+                        Component.onCompleted:text=String(window.state.growthOptions.maxDuration)
+                        Connections {
+                            target:window
+                            function onStateChanged() {
+                                if (!growthMaximum.activeFocus) growthMaximum.text=String(window.state.growthOptions.maxDuration)
+                            }
+                        }
                         validator:IntValidator {bottom:3;top:120}
                         onTextEdited:window.growthError=acceptableInput ? "" : "Use 3–120 seconds."
                         onEditingFinished:window.saveGrowth("maxDuration",Number(text))
