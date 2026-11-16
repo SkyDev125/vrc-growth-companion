@@ -203,14 +203,6 @@ class CompanionWindow(QObject):
         except OSError as error:return str(error)
 
     @Slot()
-    def copyResoniteSetup(self):
-        if self.config.get('targetApp')=='chilloutvr':
-            QGuiApplication.clipboard().setText(chilloutvr.setup_text(self.config,self.config['profiles'].get(self.profile,[]),self.sources))
-            self.status='ChilloutVR setup copied';self.stateChanged.emit();return
-        QGuiApplication.clipboard().setText(resonite.setup_text(self.config,self.config['profiles'].get(resonite.PROFILE,[]),self.sources))
-        self.status='Resonite setup copied';self.stateChanged.emit()
-
-    @Slot()
     def resend(self):
         with self.lock:self.resend_generation+=1
         self.status='Resend requested · next check';self.stateChanged.emit()

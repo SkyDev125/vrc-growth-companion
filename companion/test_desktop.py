@@ -115,9 +115,6 @@ class DesktopTests(unittest.TestCase):
   self.assertEqual(saved['targetApp'],'resonite');self.assertEqual(saved['oscDestinations']['vrchat']['port'],19000)
   self.window.events.put(('connection',True));self.window.drain()
   self.assertFalse(self.window.detected)
-  self.window.copyResoniteSetup()
-  self.assertIn('/midsden/scale',self.app.clipboard().text())
-  self.assertIn('19002',self.app.clipboard().text())
  def test_resonite_worker_never_uses_vrchat_discovery(self):
   self.window.setTargetApp('resonite');stop=threading.Event();writes=[]
   with patch.object(stop,'wait',side_effect=lambda _:stop.set()),patch.object(desktop.mapping,'discover') as discover,patch.object(desktop.mapping,'fetch_measurements',return_value=self.window.sources),patch.object(desktop.mapping,'send_mapping',side_effect=lambda c,i,s:writes.append(i)):
@@ -144,9 +141,6 @@ class DesktopTests(unittest.TestCase):
   self.window.setTargetApp('chilloutvr')
   self.assertEqual(self.window.config['oscPort'],19003)
   self.assertEqual(self.window.config['profiles'][self.window.profile],saved)
-  self.window.copyResoniteSetup()
-  self.assertIn('ScaleSlider',self.app.clipboard().text())
-  self.assertIn('authored',self.app.clipboard().text())
   self.assertEqual(desktop.core.load_config(Path(self.temp.name)/'config.json')['targetApp'],'chilloutvr')
  def test_queued_other_game_discovery_is_ignored(self):
   self.window.setTargetApp('chilloutvr')

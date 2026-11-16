@@ -2,7 +2,7 @@
 
 In Settings → Connection, choose **Resonite**. The companion keeps VRChat and Resonite mappings and destination ports separately. Our suggested Resonite port is **9002**; it is a convention you can change, not an official Resonite default. Set the same port on your in-world receiver. VRChat remains on its previous port when you switch back.
 
-Resonite has native generic OSC input. It has no universal `/avatar/eyeheight` endpoint or standard OSCQuery avatar-parameter catalogue. Suggested paths in this companion are receiver conventions, not automatically discovered fields. **Copy setup** copies instructions and your current mapping paths, types and units to the clipboard. This is a receiver setup guide, not a ready-to-import avatar asset. A receiver must be configured in-world once.
+Resonite has native generic OSC input. It has no universal `/avatar/eyeheight` endpoint or standard OSCQuery avatar-parameter catalogue. Suggested paths in this companion are receiver conventions, not automatically discovered fields. **Setup guide** walks through the receiver, mapping, calibration and verification steps inside the app, including your current mapping paths and types. This is a receiver setup guide, not a ready-to-import avatar asset. A receiver must be configured in-world once.
 
 ## Receiver
 

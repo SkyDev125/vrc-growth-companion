@@ -23,7 +23,7 @@ Smooth mode, pace, curves, maximum duration and Finish now work with ChilloutVR 
 
 If running VRChat and ChilloutVR simultaneously, use separate receive ports: both default to UDP 9000. ChilloutVR accepts `--osc-listener-port=<port>`; discovery follows its advertised port. This companion is a sender, so it does not need to bind that receive port.
 
-**Copy setup** in Settings copies these instructions plus your current destinations and mapping ranges.
+**Setup guide** in Settings opens short, navigable instructions inside the app.
 
 Protocol tests cover a local mock OSCQuery server, actual UDP packets, type/read-only checks, deduplication, advertised ports and game/profile switching. They do not replace an in-game ChilloutVR check with a compatible avatar.
 

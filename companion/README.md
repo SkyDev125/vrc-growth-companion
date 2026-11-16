@@ -12,7 +12,7 @@ Settings are stored in your user application settings directory and survive app 
 
 ## Resonite
 
-Choose **Resonite** in Settings → Connection. The app keeps separate ports and mappings and offers an Avatar scale preset, custom OSC receiver paths and **Copy setup** instructions. A one-time in-world OSC receiver and scale calibration are required. See [Resonite setup](RESONITE.md). The status stays “receiver unverified” because UDP cannot confirm delivery.
+Choose **Resonite** in Settings → Connection. The app keeps separate ports and mappings and offers an Avatar scale preset, custom OSC receiver paths and an in-app **Setup guide**. A one-time in-world OSC receiver and scale calibration are required. See [Resonite setup](RESONITE.md). The status stays “receiver unverified” because UDP cannot confirm delivery.
 
 ## ChilloutVR
 

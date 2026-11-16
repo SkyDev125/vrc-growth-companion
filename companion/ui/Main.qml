@@ -459,11 +459,10 @@ ApplicationWindow {
                                 InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.preferredWidth:180 }
                                 InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.preferredWidth:80 }
                             }
-                            Text { visible:window.state.targetApp !== "vrchat";text:window.state.targetApp === "resonite" ? "Requires an in-world OSC receiver." : "Enable OSC; scaling needs an avatar parameter.";color:"#acb8c5";font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
                             RowLayout {
                                 Layout.fillWidth: true
-                                ActionButton { visible:window.state.targetApp !== "vrchat";text:"Copy setup";quiet:true;onClicked:bridge.copyResoniteSetup() }
+                                ActionButton { objectName:"openSetupGuide";text:"Setup guide";quiet:true;onClicked:{settings.close();setupGuide.open()} }
                                 Item { Layout.fillWidth: true }
                                 ActionButton { objectName:"saveConnection"; text:"Save connection"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
                             }
@@ -481,4 +480,13 @@ ApplicationWindow {
             Text { text:window.state.update.message; visible:text.length>0; color:"#acb8c5"; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
         }
     }
+    SetupGuide {
+        id: setupGuide
+        appId: window.state.targetApp
+        gameName: window.state.targetName
+        host: window.state.host
+        port: window.state.port
+        mappings: window.state.rows
+    }
+
 }
