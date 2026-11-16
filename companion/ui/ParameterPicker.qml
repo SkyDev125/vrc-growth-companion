@@ -6,6 +6,8 @@ Item {
     id: picker
     implicitHeight: 40
     property var parameters: []
+    property string listTitle: "AVATAR PARAMETERS"
+    property string searchHint: "Search or enter a parameter"
     property string address: ""
     property string selectedKind: "float"
     property bool browsingAll: false
@@ -39,7 +41,7 @@ Item {
         objectName: "parameterSearch"
         anchors.fill: parent
         rightPadding: 42
-        placeholderText: "Search or enter a parameter"
+        placeholderText: picker.searchHint
         onTextEdited: {
             picker.address = text
             picker.browsingAll = false
@@ -81,7 +83,7 @@ Item {
         contentItem: ColumnLayout {
             id: parameterContent
             spacing: 4
-            Text { id: caption; text: picker.browsingAll ? "AVATAR PARAMETERS" : "SEARCH RESULTS"; color: "#8c9bac"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.leftMargin: 8; Layout.topMargin: 4 }
+            Text { id: caption; text: picker.browsingAll ? picker.listTitle : "SEARCH RESULTS"; color: "#8c9bac"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.leftMargin: 8; Layout.topMargin: 4 }
             ListView {
                 id: list
                 objectName: "parameterResults"

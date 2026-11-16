@@ -1,4 +1,4 @@
-# Mid's Den VRChat Companion
+# Mid's Den Companion
 
 Syncs Mid’s Den measurements to VRChat’s eye height and avatar parameters over OSC. Each platform package includes its own Python runtime, so you do not need to install Python or download a runtime on first launch.
 
@@ -9,6 +9,10 @@ Download from the website: run the Windows setup EXE, drag the macOS app from it
 The desktop window saves the VRChat IP and OSC receive port (defaults: `127.0.0.1`, `9000`). It applies enabled mappings on startup, then sends only changed OSC values. Use Stop, edit settings, then Start to apply changes. Enable OSC in VRChat and keep the window open. “Sending” does not confirm receipt inside the game.
 
 Settings are stored in your user application settings directory and survive app upgrades. The desktop interface uses Qt Quick/QML through PySide6, bundled with the application. It uses the website’s paw icon for the app and native installers. Builds are unsigned and may require OS opening approval. Windows/macOS/Linux native builds and smoke tests run in [GitHub Actions](https://github.com/SkyDev125/vrc-growth-companion/actions).
+
+## Resonite
+
+Choose **Resonite** in Settings → Connection. The app keeps separate ports and mappings and offers an Avatar scale preset, custom OSC receiver paths and **Copy setup** instructions. A one-time in-world OSC receiver and scale calibration are required. See [Resonite setup](RESONITE.md). The status stays “receiver unverified” because UDP cannot confirm delivery.
 
 ## Smooth growth
 

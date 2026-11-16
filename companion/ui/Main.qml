@@ -56,12 +56,12 @@ ApplicationWindow {
         outMax.text = String(draft.outputMax === undefined ? 1 : draft.outputMax)
         threshold.text = String(draft.threshold === undefined ? 1 : draft.threshold)
         enabledToggle.checked = draft.enabled !== false
-        smoothMapping.checked = draft.smooth !== undefined ? draft.smooth : !!(draft.target === "/avatar/eyeheight" || (editorData.sources[sourceSelect.currentIndex] || {}).syncTarget && editorData.sources[sourceSelect.currentIndex].syncTarget !== "none")
+        smoothMapping.checked = draft.smooth !== undefined ? draft.smooth : !!((draft.target === "/avatar/eyeheight" || draft.target === "/midsden/scale") || (editorData.sources[sourceSelect.currentIndex] || {}).syncTarget && editorData.sources[sourceSelect.currentIndex].syncTarget !== "none")
         editor.open()
     }
     function saveEditor() {
         var item = {source:sourceSelect.currentValue || "",target:parameter.address,
-            kind:kindSelect.currentValue,mode:modeSelect.currentValue,enabled:enabledToggle.checked,smooth:smoothMapping.checked,
+            kind:kindSelect.currentValue,mode:modeSelect.currentValue,platform:window.editorData.platform || 'vrchat',enabled:enabledToggle.checked,smooth:smoothMapping.checked,
             inputMin:inMin.text,inputMax:inMax.text,outputMin:outMin.text,outputMax:outMax.text,threshold:threshold.text}
         editError = bridge.saveMapping(JSON.stringify(item))
         if (!editError) editor.close()
@@ -99,7 +99,7 @@ ApplicationWindow {
                     ColumnLayout {
                         spacing: 3
                         Text { text: "Mid’s Den"; color: "#f0f3f7"; font.pixelSize: 21; font.weight: Font.DemiBold }
-                        SmallText { text: "VRChat companion" }
+                        SmallText { text: window.state.targetName + " companion" }
                     }
                     Item { Layout.fillWidth: true }
                     ActionButton { text: "Resend"; quiet: true; enabled: !window.state.paused; onClicked: bridge.resend(); ToolTip.visible: hovered; ToolTip.text: "Apply the current values once again" }
@@ -122,8 +122,8 @@ ApplicationWindow {
                     RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 9
                         Rectangle { width: 6; height: 6; radius: 3; color: window.state.paused ? "#dfc48d" : window.state.detected ? "#83c7b4" : "#8795a5"; Behavior on color { ColorAnimation { duration: 160 } } }
-                        Text { text: window.state.paused ? "Paused" : window.state.detected ? "VRChat detected" : "Waiting for VRChat"; color: "#c6d6df"; font.pixelSize: 12; font.weight: Font.Medium }
-                        SmallText { text: window.state.profile === "manual" ? "Shared mappings" : "Avatar · " + window.state.profile.slice(-8); Layout.leftMargin: 9 }
+                        Text { text: window.state.paused ? "Paused" : window.state.targetApp === "resonite" ? "Resonite OSC · receiver unverified" : window.state.detected ? "VRChat detected" : "Waiting for VRChat"; color: "#c6d6df"; font.pixelSize: 12; font.weight: Font.Medium }
+                        SmallText { text: window.state.targetApp === "resonite" ? "Resonite mappings" : window.state.profile === "manual" ? "Shared mappings" : "Avatar · " + window.state.profile.slice(-8); Layout.leftMargin: 9 }
                         Item { Layout.fillWidth: true }
                         SmallText { text: window.state.sourceCount + " measurements" }
                     }
@@ -145,7 +145,7 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true; Layout.leftMargin: 62; Layout.rightMargin: 118; spacing: 12; Layout.topMargin: 10; Layout.bottomMargin: 5
                             SmallText { text: "MEASUREMENT"; font.pixelSize: 9; font.letterSpacing: 1; Layout.preferredWidth: 200 }
-                            SmallText { text: "AVATAR PARAMETER"; font.pixelSize: 9; font.letterSpacing: 1; Layout.fillWidth: true }
+                            SmallText { text: window.state.targetApp === "resonite" ? "RECEIVER PATH" : "AVATAR PARAMETER"; font.pixelSize: 9; font.letterSpacing: 1; Layout.fillWidth: true }
                             SmallText { text: "OUTPUT"; font.pixelSize: 9; font.letterSpacing: 1; Layout.preferredWidth: 74; horizontalAlignment: Text.AlignRight }
                         }
                         ListView {
@@ -213,7 +213,7 @@ ApplicationWindow {
         x: presetsButton.width - width; y: presetsButton.height + 6; width: 190; padding: 6
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { radius: 10; color: "#202c3a"; border.color: "#3a485a" }
-        contentItem: ActionButton { text: "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
+        contentItem: ActionButton { text: window.state.targetApp === "resonite" ? "Avatar scale" : "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
     }
     Popup {
         id: editor
@@ -259,10 +259,12 @@ ApplicationWindow {
             GridLayout {
                 columns: 2; rowSpacing: 7; columnSpacing: 14; Layout.fillWidth: true
                 FieldLabel { text: "Measurement" }
-                FieldLabel { text: "Avatar parameter" }
+                FieldLabel { text: window.state.targetApp === "resonite" ? "Receiver path" : "Avatar parameter" }
                 SelectField { id: sourceSelect; Layout.preferredWidth: 175; Layout.fillWidth: true; model: [] }
                 ParameterPicker {
                     id: parameter
+                    listTitle: window.state.targetApp === "resonite" ? "SUGGESTED RECEIVER PATHS" : "AVATAR PARAMETERS"
+                    searchHint: window.state.targetApp === "resonite" ? "Enter an OSC receiver path" : "Search or enter a parameter"
                     Layout.preferredWidth: 340; Layout.fillWidth: true
                     onSelected: function(address,kind) {
                         kindSelect.currentIndex = ["float","int","bool"].indexOf(kind)
@@ -270,6 +272,8 @@ ApplicationWindow {
                             smoothMapping.checked = true
                             sourceSelect.currentIndex = sourceSelect.model.findIndex(s => s.value === "height")
                             modeSelect.currentIndex = 0
+                        } else if (address === "/midsden/scale") {
+                            sourceSelect.currentIndex=sourceSelect.model.findIndex(s => s.value === "height");modeSelect.currentIndex=1;smoothMapping.checked=true
                         } else if (kind === "bool") modeSelect.currentIndex = 3
                     }
                 }
@@ -435,13 +439,27 @@ ApplicationWindow {
                             Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 260; Layout.alignment: Qt.AlignTop
                             spacing: 12
                             SmallText { text: "CONNECTION"; color: "#dfc48d"; font.letterSpacing: 1 }
-                            FieldLabel { text: "VRChat IP address" }
-                            InputField { id: hostInput; objectName: "hostInput"; Layout.fillWidth: true }
-                            FieldLabel { text: "OSC receive port" }
-                            InputField { id: portInput; objectName: "portInput"; Layout.fillWidth: true }
+                            RowLayout {
+                                Layout.fillWidth:true
+                                FieldLabel { text:"App" }
+                                SelectField { objectName:"targetApp";Layout.preferredWidth:170
+                                    model:[{label:"VRChat",value:"vrchat"},{label:"Resonite",value:"resonite"}]
+                                    currentIndex:window.state.targetApp === "resonite" ? 1 : 0
+                                    onActivated:{window.connectionError=bridge.setTargetApp(currentValue);hostInput.text=window.state.host;portInput.text=String(window.state.port)}
+                                }
+                            }
+                            GridLayout {
+                                columns:2;columnSpacing:12;rowSpacing:6;Layout.fillWidth:true
+                                FieldLabel { text:"IP address" }
+                                FieldLabel { text:"OSC port" }
+                                InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.preferredWidth:180 }
+                                InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.preferredWidth:80 }
+                            }
+                            Text { visible:window.state.targetApp === "resonite";text:"Requires an in-world OSC receiver.";color:"#acb8c5";font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
                             RowLayout {
                                 Layout.fillWidth: true
+                                ActionButton { visible:window.state.targetApp === "resonite";text:"Copy setup";quiet:true;onClicked:bridge.copyResoniteSetup() }
                                 Item { Layout.fillWidth: true }
                                 ActionButton { objectName:"saveConnection"; text:"Save connection"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
                             }

@@ -181,6 +181,21 @@ class QuickInterfaceTests(unittest.TestCase):
     self.assertGreaterEqual(first.x(),top.x()-.1,name);self.assertGreaterEqual(first.y(),top.y()-.1,name)
     self.assertLessEqual(last.x(),bottom.x()+.1,name);self.assertLessEqual(last.y(),bottom.y()+.1,name)
   self.assertFalse(self.warnings,self.warnings)
+ def test_resonite_settings_and_mapping_picker(self):
+  self.bridge.setSmoothGrowth(True)
+  self.evaluate(self.root.findChild(QObject,'connectionSettings'),'clicked()');QTest.qWait(50)
+  app=self.root.findChild(QObject,'targetApp')
+  self.evaluate(app,'currentIndex=1;activated(1)');QTest.qWait(50)
+  self.assertEqual(self.evaluate(self.root,'state.targetApp'),'resonite')
+  self.root.setWidth(820);self.root.setHeight(600);QTest.qWait(60)
+  self.assertFalse(self.root.findChild(QObject,'settingsScrollbar').property('visible'))
+  self.assertEqual(self.root.findChild(QObject,'portInput').property('text'),'9002')
+  self.evaluate(self.root.findChild(QObject,'settingsPopup'),'close()')
+  self.bridge.eyeHeightPreset();QTest.qWait(120)
+  picker=self.root.findChild(QObject,'parameterSearch').parentItem()
+  self.assertEqual(picker.property('address'),'/midsden/scale')
+  self.assertEqual(picker.property('listTitle'),'SUGGESTED RECEIVER PATHS')
+  self.assertFalse(self.warnings,self.warnings)
 
  def test_short_window_scrollbar_reserves_gutter_outside_controls(self):
   self.bridge.setSmoothGrowth(True)

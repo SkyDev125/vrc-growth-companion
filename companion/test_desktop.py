@@ -97,3 +97,31 @@ class DesktopTests(unittest.TestCase):
   with patch.object(stop,'wait',side_effect=wait),patch.object(m,'discover',side_effect=lambda *_a,**_k:copy.deepcopy(states[position[0]][0])),patch.object(m,'fetch_measurements',side_effect=sources),patch.object(m,'send_mapping',side_effect=lambda c,i,s:writes.append(s['value'])):
    self.window.sync(stop)
   self.assertEqual(writes,[3,4,4,4])
+ def test_resonite_switch_preserves_mappings_ports_and_persists(self):
+  original=copy.deepcopy(self.window.config['profiles']['manual'])
+  self.assertEqual(self.window.saveConnection('127.0.0.1','19000'),'')
+  self.assertEqual(self.window.setTargetApp('resonite'),'')
+  self.assertEqual(self.window.profile,'resonite');self.assertEqual(self.window.config['oscPort'],9002)
+  self.window.openEditor(0)
+  self.assertEqual(json.loads(self.window.editorJson)['parameters'][0]['address'],'/midsden/scale')
+  self.assertEqual(self.window.saveMapping(json.dumps(self.window.editor['item'])),'')
+  self.assertEqual(self.window.saveConnection('127.0.0.1','19002'),'')
+  self.assertEqual(self.window.setTargetApp('vrchat'),'')
+  self.assertEqual(self.window.config['oscPort'],19000)
+  self.assertEqual(self.window.config['profiles']['manual'],original)
+  self.assertEqual(self.window.setTargetApp('resonite'),'')
+  self.assertEqual(self.window.config['oscPort'],19002)
+  saved=desktop.core.load_config(Path(self.temp.name)/'config.json')
+  self.assertEqual(saved['targetApp'],'resonite');self.assertEqual(saved['oscDestinations']['vrchat']['port'],19000)
+  self.window.events.put(('connection',True));self.window.drain()
+  self.assertFalse(self.window.detected)
+  self.window.copyResoniteSetup()
+  self.assertIn('/midsden/scale',self.app.clipboard().text())
+  self.assertIn('19002',self.app.clipboard().text())
+ def test_resonite_worker_never_uses_vrchat_discovery(self):
+  self.window.setTargetApp('resonite');stop=threading.Event();writes=[]
+  with patch.object(stop,'wait',side_effect=lambda _:stop.set()),patch.object(desktop.mapping,'discover') as discover,patch.object(desktop.mapping,'fetch_measurements',return_value=self.window.sources),patch.object(desktop.mapping,'send_mapping',side_effect=lambda c,i,s:writes.append(i)):
+   self.window.sync(stop)
+  discover.assert_not_called()
+  self.assertEqual(len(writes),1);self.assertEqual(writes[0]['target'],'/midsden/scale')
+  self.assertEqual(writes[0]['platform'],'resonite')

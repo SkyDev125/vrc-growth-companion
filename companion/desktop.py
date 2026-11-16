@@ -17,6 +17,7 @@ from measurement_format import format_measurement
 from update_controller import UpdateController
 from smooth_growth import MotionSender
 from growth_options import normalize as growth_options
+import resonite
 
 
 def settings_path():
@@ -41,6 +42,9 @@ class CompanionWindow(QObject):
         try:self.config=core.load_config(settings_path())
         except (OSError,ValueError):self.config={'serverUrl':core.DEFAULT_URL,'oscHost':'127.0.0.1','oscPort':9000,'oscQueryPort':9001}
         mapping.migrate_profiles(self.config)
+        if self.config.get('targetApp')=='resonite':
+            self.profile=resonite.PROFILE
+            self.config['profiles'].setdefault(self.profile,[resonite.scale_preset()])
         self.updates=UpdateController(settings_path().parent/'updates',
             enabled=auto_start and not os.environ.get('MIDSDEN_DISABLE_UPDATE_CHECKS'),parent=self)
         self.updates.changed.connect(self.stateChanged)
@@ -58,7 +62,7 @@ class CompanionWindow(QObject):
             source=sources.get(item['source']);enabled=item.get('enabled',True)
             output='Waiting';health='waiting'
             if not enabled:output='Off';health='off'
-            elif source and mapping.can_send(item,sources,self.discovery):
+            elif source and item.get('platform','vrchat')==self.config.get('targetApp','vrchat') and mapping.can_send(item,sources,self.discovery):
                 try:
                     value=mapping.mapped_value(item,source)
                     output=('On' if value else 'Off') if isinstance(value,bool) else f'{value:.4g}'
@@ -72,10 +76,11 @@ class CompanionWindow(QObject):
                 output='Blocked';health='waiting'
             rows.append({'name':source['name'] if source else ('Height' if item['source']=='height' else item['source']),
                 'value':format_measurement(source['value'],source['unit']) if source else 'Waiting for website',
-                'target':'Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX),
+                'target':'Avatar scale' if item['target']=='/midsden/scale' else 'Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX),
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
             'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
+            'targetApp':self.config.get('targetApp','vrchat'),'targetName':'Resonite' if self.config.get('targetApp')=='resonite' else 'VRChat',
             'update':self.updates.state,'smoothGrowth':self.config.get('smoothGrowth',False),'growthOptions':growth_options(self.config.get('growthOptions')),'motion':self.motion})
 
     @Slot()
@@ -91,7 +96,8 @@ class CompanionWindow(QObject):
         parameters=[{'name':'Eye height','address':'/avatar/eyeheight','kind':'float','writable':True}]
         parameters.extend({'name':address.removeprefix(mapping.PREFIX),'address':address,'kind':info.get('kind') or 'unsupported',
             'writable':bool(info.get('writable') and info.get('kind') in ('float','int','bool'))} for address,info in sorted(available.items()))
-        return json.dumps({**self.editor,'parameters':parameters,'sources':self.sources,'error':self.editor_error})
+        if self.config.get('targetApp')=='resonite':parameters=resonite.parameter_options(self.sources)
+        return json.dumps({**self.editor,'platform':self.config.get('targetApp','vrchat'),'parameters':parameters,'sources':self.sources,'error':self.editor_error})
 
     @Slot(int)
     def openEditor(self,index):
@@ -99,21 +105,25 @@ class CompanionWindow(QObject):
         if index>=len(items):return
         item=copy.deepcopy(items[index]) if index>=0 else {'source':self.sources[0]['id'] if self.sources else '',
             'target':'','kind':'float','mode':'range','enabled':True,'inputMin':0,'inputMax':10,'outputMin':0,'outputMax':1,'threshold':1}
+        item['platform']=self.config.get('targetApp','vrchat')
         self.editor={'index':index,'profile':self.profile,'item':item};self.editor_error='';self.editorChanged.emit()
 
     @Slot()
     def eyeHeightPreset(self):
         items=self.config['profiles'].get(self.profile,[])
-        index=next((i for i,item in enumerate(items) if item['target']=='/avatar/eyeheight'),-1)
+        target='/midsden/scale' if self.config.get('targetApp')=='resonite' else '/avatar/eyeheight'
+        index=next((i for i,item in enumerate(items) if item['target']==target),-1)
         self.openEditor(index)
-        if index<0:self.editor['item']=mapping.eye_height_preset();self.editorChanged.emit()
+        if index<0:self.editor['item']=resonite.scale_preset() if self.config.get('targetApp')=='resonite' else mapping.eye_height_preset();self.editorChanged.emit()
 
     @Slot(str,result=str)
     def saveMapping(self,raw):
         try:
             if self.editor is None:raise ValueError('Open a mapping first.')
             if self.editor['profile']!=self.profile:raise ValueError('Avatar changed. Reopen this mapping before saving.')
-            item=mapping.validate_mapping(json.loads(raw))
+            raw_item=json.loads(raw)
+            raw_item['platform']=self.config.get('targetApp','vrchat')
+            item=mapping.validate_mapping(raw_item)
             if item['source'] not in {s['id'] for s in self.sources}:raise ValueError('Choose an available measurement.')
             info=(self.discovery or {}).get('allParameters',{}).get(item['target'])
             if info and (not info['writable'] or info['kind']!=item['kind']):raise ValueError('Choose a writable parameter with the matching type.')
@@ -152,9 +162,42 @@ class CompanionWindow(QObject):
         try:
             address=core.validate_osc_host(host);number=int(port)
             if not 1<=number<=65535:raise ValueError('Use a port between 1 and 65535.')
-            with self.lock:self.config.update(oscHost=address,oscPort=number)
+            with self.lock:
+                self.config.update(oscHost=address,oscPort=number)
+                self.config.setdefault('oscDestinations',{})[self.config.get('targetApp','vrchat')]={'host':address,'port':number}
             self.persist();self.discovery=None;self.motion_epoch+=1;self.motion={'active':False,'outputs':{}};self.stateChanged.emit();return ''
         except (ValueError,OSError) as error:return str(error)
+
+    @Slot(str,result=str)
+    def setTargetApp(self,target):
+        if target not in ('vrchat','resonite'):return 'Choose VRChat or Resonite.'
+        if target==self.config.get('targetApp','vrchat'):return ''
+        try:
+            with self.lock:
+                previous=copy.deepcopy(self.config)
+                destinations=self.config.setdefault('oscDestinations',{})
+                destinations[self.config.get('targetApp','vrchat')]={'host':self.config['oscHost'],'port':self.config['oscPort']}
+                saved=destinations.get(target,{})
+                try:
+                    host=core.validate_osc_host(str(saved.get('host','127.0.0.1')))
+                    port=int(saved.get('port',resonite.DEFAULT_PORT if target=='resonite' else 9000))
+                    if not 1<=port<=65535:raise ValueError()
+                except (ValueError,TypeError,AttributeError):host='127.0.0.1';port=resonite.DEFAULT_PORT if target=='resonite' else 9000
+                self.config.update(targetApp=target,oscHost=host,oscPort=port)
+                if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE,[resonite.scale_preset()])
+                try:core.save_config(self.config,settings_path())
+                except OSError:self.config=previous;raise
+                self.motion_epoch+=1
+            self.profile=resonite.PROFILE if target=='resonite' else 'manual'
+            self.discovery=None;self.detected=False;self.motion={'active':False,'outputs':{}}
+            self.status='Resonite OSC · receiver unverified' if target=='resonite' else 'Waiting for VRChat'
+            self.stateChanged.emit();return ''
+        except OSError as error:return str(error)
+
+    @Slot()
+    def copyResoniteSetup(self):
+        QGuiApplication.clipboard().setText(resonite.setup_text(self.config,self.config['profiles'].get(resonite.PROFILE,[]),self.sources))
+        self.status='Resonite setup copied';self.stateChanged.emit()
 
     @Slot()
     def resend(self):
@@ -201,11 +244,13 @@ class CompanionWindow(QObject):
             event=self.events.get_nowait()
             if self.stop_event.is_set():continue
             changed=True
-            if event[0]=='connection':self.detected=event[1]
+            if event[0]=='connection':self.detected=False if self.config.get('targetApp')=='resonite' else event[1]
             elif event[0]=='status':self.status=event[1]
             elif event[0]=='motion':self.motion=event[1]
             else:
-                self.sources,self.discovery=event[1:];self.profile=mapping.profile_key(self.discovery)
+                self.sources,self.discovery=event[1:]
+                if self.config.get('targetApp')=='resonite':self.discovery=None
+                self.profile=resonite.PROFILE if self.config.get('targetApp')=='resonite' else mapping.profile_key(self.discovery)
                 if self.editor and self.editor['profile']!=self.profile:
                     self.editor_error='Avatar changed. Reopen this mapping before saving.'
         if changed:self.stateChanged.emit()
@@ -225,24 +270,25 @@ class CompanionWindow(QObject):
             with self.lock: config = copy.deepcopy(self.config)
             try:
                 browse = time.monotonic()-last_browse>30
-                discovery = mapping.discover(config,known_port,browse=browse)
+                is_resonite=config.get('targetApp')=='resonite'
+                discovery = None if is_resonite else mapping.discover(config,known_port,browse=browse)
                 if browse: last_browse=time.monotonic()
                 if discovery: known_port=discovery['queryPort']
                 if discovery and not was_detected:reconnect+=1
                 was_detected=bool(discovery)
                 self.events.put(('connection',bool(discovery)))
                 with self.lock:requested_generation=self.resend_generation;epoch=self.motion_epoch
-                if not discovery and ever_detected and requested_generation==last_generation:
+                if not is_resonite and not discovery and ever_detected and requested_generation==last_generation:
                     sender.clear()
                     self.events.put(('status','VRChat discovery lost · waiting to reconnect'))
                     stop.wait(core.DEFAULT_POLL_SECONDS)
                     continue
                 ever_detected=ever_detected or bool(discovery)
-                profile = last_profile if not discovery and ever_detected else mapping.profile_key(discovery)
+                profile = resonite.PROFILE if is_resonite else last_profile if not discovery and ever_detected else mapping.profile_key(discovery)
                 last_profile=profile
                 with self.lock:
                     if profile not in self.config['profiles']:
-                        self.config['profiles'][profile]=[mapping.eye_height_preset()]
+                        self.config['profiles'][profile]=[resonite.scale_preset() if is_resonite else mapping.eye_height_preset()]
                         core.save_config(self.config,settings_path())
                     config=copy.deepcopy(self.config)
                     generation=self.resend_generation;epoch=self.motion_epoch
@@ -250,11 +296,11 @@ class CompanionWindow(QObject):
                 if epoch!=self.motion_epoch:continue
                 self.events.put(('data',sources,discovery))
                 items=config.get('profiles',{}).get(profile,[])
-                sender.submit((config['oscHost'],config['oscPort'],profile,known_port,reconnect,generation),config,items,sources,discovery)
+                sender.submit((config['oscHost'],config['oscPort'],profile,None if is_resonite else known_port,reconnect,generation),config,items,sources,discovery)
                 active=sum(i.get('enabled',True) for i in items)
                 skipped=0;sent=0
                 last_generation=generation
-                self.events.put(('status',f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else '')))
+                self.events.put(('status',('Resonite OSC · receiver unverified · ' if is_resonite else '')+f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else '')))
             except (OSError,ValueError,RuntimeError) as error:
                 self.events.put(('status',str(error)))
             stop.wait(core.DEFAULT_POLL_SECONDS)

@@ -91,7 +91,7 @@ class Transition:
 
 def wants_smoothing(item, sources, enabled):
     source=sources.get(item['source'],{})
-    default=item['target']=='/avatar/eyeheight' or source.get('syncTarget','none')!='none'
+    default=item['target'] in ('/avatar/eyeheight','/midsden/scale') or source.get('syncTarget','none')!='none'
     return enabled and item['kind']=='float' and item.get('smooth',default)
 
 
@@ -125,7 +125,7 @@ class MotionSender:
         if self.stop.is_set() or self.config is None:return
         with self.owner.lock:
             live=copy.deepcopy(self.owner.config);epoch=self.owner.motion_epoch;finish=self.owner.finish_generation
-        if epoch!=self.epoch or (live['oscHost'],live['oscPort'])!=self.context[:2]:self.clear();return
+        if epoch!=self.epoch or live.get('targetApp','vrchat')!=self.config.get('targetApp','vrchat') or (live['oscHost'],live['oscPort'])!=self.context[:2]:self.clear();return
         raw={s['id']:s for s in self.transition.targets}
         if normalize(live.get('growthOptions'))!=self.transition.options:
             animated={i['source'] for i in self.items if i.get('enabled',True) and wants_smoothing(i,raw,live.get('smoothGrowth',False))}
@@ -135,7 +135,7 @@ class MotionSender:
         displayed={s['id']:s for s in self.transition.values(now)}
         items=live.get('profiles',{}).get(self.context[2],[])
         # Mapping edits, toggles and removals are effective at the next animation tick.
-        valid=[i for i in self.items if i in items and i.get('enabled',True) and mapping.can_send(i,raw,self.discovery)]
+        valid=[i for i in self.items if i in items and i.get('platform','vrchat')==live.get('targetApp','vrchat') and i.get('enabled',True) and mapping.can_send(i,raw,self.discovery)]
         self.sender.prune({i['target'] for i in valid})
         active=False;outputs={}
         for item in valid:

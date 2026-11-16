@@ -1,4 +1,4 @@
-"""Read-only discovery and scalar avatar-parameter mappings. No arbitrary OSC commands."""
+"""Scalar OSC mappings, VRChat discovery and explicit Resonite receiver paths."""
 import copy
 import ipaddress
 import json
@@ -8,6 +8,7 @@ import struct
 import time
 from urllib.request import Request, build_opener
 import vrchat_companion as core
+import resonite
 try:
     from zeroconf import Zeroconf, ServiceBrowser, ServiceListener, IPVersion
 except ImportError:
@@ -30,7 +31,8 @@ def parameter_address(value):
 
 def validate_mapping(mapping):
     result = copy.deepcopy(mapping)
-    result['target'] = parameter_address(result.get('target', ''))
+    if result.get('platform','vrchat') not in ('vrchat','resonite'):raise ValueError('Choose VRChat or Resonite.')
+    result['target'] = resonite.address(result.get('target','')) if result.get('platform')=='resonite' else parameter_address(result.get('target', ''))
     if not result.get('source') or result.get('kind') not in ('float', 'int', 'bool'):
         raise ValueError('Choose a website measurement and OSC value type.')
     if result['target'] == '/avatar/eyeheight' and (result['source'] != 'height' or result['kind'] != 'float'):
@@ -84,8 +86,9 @@ def mapped_value(mapping, source):
     return value
 
 
-def encode_parameter(address, kind, value):
-    address = parameter_address(address)
+def encode_parameter(address, kind, value, platform='vrchat'):
+    address = resonite.address(address) if platform=='resonite' else parameter_address(address)
+    if platform=='resonite' and kind=='bool':kind='int';value=int(bool(value))
     if kind == 'bool':
         tag, payload = ('T' if value else 'F'), b''
     elif kind == 'int':
@@ -99,7 +102,7 @@ def encode_parameter(address, kind, value):
 
 def send_mapping(config, mapping, source):
     value = mapped_value(mapping, source)
-    packet = encode_parameter(mapping['target'], mapping['kind'], value)
+    packet = encode_parameter(mapping['target'], mapping['kind'], value, mapping.get('platform','vrchat'))
     host = core.validate_osc_host(config['oscHost'])
     port = int(config['oscPort'])
     if not 1 <= port <= 65535:
@@ -224,6 +227,7 @@ def fetch_measurements(config):
 def can_send(item, sources, discovery):
     if item.get('source') not in sources:
         return False
+    if item.get('platform')=='resonite':return True
     if item.get('target') == '/avatar/eyeheight':
         return True
     if discovery is not None:
@@ -243,7 +247,8 @@ def migrate_profiles(config):
     if config.get('mappingVersion',0) >= 2: return
     profiles=config.setdefault('profiles',{})
     profiles.setdefault('manual',[])
-    for items in profiles.values():
+    for key,items in profiles.items():
+        if key=='resonite':continue
         if not any(item.get('target')=='/avatar/eyeheight' for item in items):
             items.insert(0,eye_height_preset(config.get('syncHeight',True)))
     config['mappingVersion']=2
@@ -266,7 +271,7 @@ class ChangedSender:
 
     def send(self,config,item,source):
         value=mapped_value(item,source)
-        packet=encode_parameter(item['target'],item['kind'],value)
+        packet=encode_parameter(item['target'],item['kind'],value,item.get('platform','vrchat'))
         if self.packets.get(item['target'])==packet:return False
         send_mapping(config,item,source)
         self.packets[item['target']]=packet

@@ -40,6 +40,7 @@ APP_FILES = (
     "growth_options.py",
     "desktop.py",
     "avatar_mapping.py",
+    "resonite.py",
     "measurement_format.py",
     "measurement-units.json",
 )
