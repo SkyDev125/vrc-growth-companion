@@ -18,6 +18,7 @@ else:
 with tempfile.TemporaryDirectory() as directory:
     report = Path(directory) / 'report.json'
     env = dict(os.environ, MIDSDEN_SMOKE_REPORT=str(report), MIDSDEN_DISABLE_UPDATE_CHECKS='1')
+    print('Checking frozen app startup', flush=True)
     subprocess.run([str(binary), '--self-test'], env=env, check=True, timeout=90)
     result = json.loads(report.read_text(encoding='utf-8'))
     assert result == {'status': 'ok', 'platform': sys.platform}, result
@@ -33,7 +34,7 @@ with tempfile.TemporaryDirectory() as directory:
         app_env=dict(env,LOCALAPPDATA=str(isolated),MIDSDEN_TEST_EXE=str(installed))
         script="@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $env:MIDSDEN_TEST_EXE } | Select-Object ProcessId,ParentProcessId,@{Name='HasWindow';Expression={ (Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue).MainWindowHandle -ne 0 }}) | ConvertTo-Json -Compress"
         def processes():
-            raw=subprocess.check_output(['powershell.exe','-NoProfile','-Command',script],env=app_env,text=True).strip()
+            raw=subprocess.check_output(['powershell.exe','-NoProfile','-Command',script],env=app_env,text=True,timeout=15).strip()
             data=json.loads(raw) if raw else []
             return data if isinstance(data,list) else [data]
         def start_running(expected):
@@ -52,6 +53,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert processes()==[], 'Upgrade left an old app process running or unexpectedly restarted it'
         # Reproduce the reported two-process one-file installation, then update it.
         previous=Path(directory)/'previous';previous.mkdir()
+        print('Windows: installing legacy app and checking running-app upgrade', flush=True)
         subprocess.run(['gh','release','download','desktop-13-1','--repo',os.environ['GH_REPO'],
             '--pattern','mids-den-companion-windows-setup.exe','--dir',str(previous)],check=True,timeout=120)
         subprocess.run([str(previous/'mids-den-companion-windows-setup.exe'),*install_args],check=True,timeout=180)
@@ -62,10 +64,12 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run([str(installed),'--self-test'],env=app_env,check=True,timeout=90)
         assert json.loads(report.read_text())['status']=='ok'
         # Future upgrades see a single process and close it as well.
+        print('Windows: checking current running-app upgrade', flush=True)
         new_app=start_running(1)
         upgrade_running(new_app)
         subprocess.run([str(installed),'--self-test'],env=app_env,check=True,timeout=90)
         # Exercise the updater's real external PowerShell -> setup -> restart handoff.
+        print('Windows: checking updater install/restart handoff', flush=True)
         sys.path.insert(0,str(Path(__file__).parent))
         import updater
         new_app=start_running(1)
@@ -81,7 +85,7 @@ with tempfile.TemporaryDirectory() as directory:
         finally:
             os.environ.clear();os.environ.update(saved_env)
         subprocess.run(['powershell.exe','-NoProfile','-Command',
-            '(Get-Process -Id '+str(new_app.pid)+').CloseMainWindow() | Out-Null'],check=True)
+            '(Get-Process -Id '+str(new_app.pid)+').CloseMainWindow() | Out-Null'],check=True,timeout=15)
         new_app.wait(timeout=30)
         assert helper.wait(timeout=240)==0
         deadline=time.monotonic()+90
@@ -90,6 +94,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert (Path(directory)/'update cache/install-result.txt').read_text(encoding='utf-8-sig').strip()=='ok'
         assert json.loads((config_dir/'config.json').read_text())['oscPort']==19000
         time.sleep(2) # Let the self-test window and runtime exit before uninstalling.
+        print('Windows: checking uninstall', flush=True)
         subprocess.run([str(install_dir/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'],check=True,timeout=90)
         print('Windows: two-process legacy upgrade, single-process new app, running-app upgrade, and uninstall passed')
     elif sys.platform == 'darwin':

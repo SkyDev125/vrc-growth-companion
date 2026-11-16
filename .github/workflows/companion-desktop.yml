@@ -62,10 +62,11 @@ jobs:
       - if: runner.os == 'Linux'
         run: xvfb-run -a python companion/smoke-desktop.py
       - if: runner.os != 'Linux'
+        timeout-minutes: 6
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: python companion/smoke-desktop.py
+        run: python -u companion/smoke-desktop.py
       - name: Collect installer
         shell: bash
         run: |
