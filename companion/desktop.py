@@ -18,6 +18,7 @@ from update_controller import UpdateController
 from smooth_growth import MotionSender
 from growth_options import normalize as growth_options
 import resonite
+import chilloutvr
 
 
 def settings_path():
@@ -45,6 +46,9 @@ class CompanionWindow(QObject):
         if self.config.get('targetApp')=='resonite':
             self.profile=resonite.PROFILE
             self.config['profiles'].setdefault(self.profile,[resonite.scale_preset()])
+        elif self.config.get('targetApp')=='chilloutvr':
+            self.profile=chilloutvr.MANUAL_PROFILE
+            self.config['profiles'].setdefault(self.profile,[])
         self.updates=UpdateController(settings_path().parent/'updates',
             enabled=auto_start and not os.environ.get('MIDSDEN_DISABLE_UPDATE_CHECKS'),parent=self)
         self.updates.changed.connect(self.stateChanged)
@@ -80,7 +84,7 @@ class CompanionWindow(QObject):
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
             'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
-            'targetApp':self.config.get('targetApp','vrchat'),'targetName':'Resonite' if self.config.get('targetApp')=='resonite' else 'VRChat',
+            'targetApp':self.config.get('targetApp','vrchat'),'targetName':{'vrchat':'VRChat','resonite':'Resonite','chilloutvr':'ChilloutVR'}.get(self.config.get('targetApp'),'VRChat'),
             'update':self.updates.state,'smoothGrowth':self.config.get('smoothGrowth',False),'growthOptions':growth_options(self.config.get('growthOptions')),'motion':self.motion})
 
     @Slot()
@@ -97,6 +101,7 @@ class CompanionWindow(QObject):
         parameters.extend({'name':address.removeprefix(mapping.PREFIX),'address':address,'kind':info.get('kind') or 'unsupported',
             'writable':bool(info.get('writable') and info.get('kind') in ('float','int','bool'))} for address,info in sorted(available.items()))
         if self.config.get('targetApp')=='resonite':parameters=resonite.parameter_options(self.sources)
+        elif self.config.get('targetApp')=='chilloutvr':parameters=[p for p in parameters if p['address']!='/avatar/eyeheight']
         return json.dumps({**self.editor,'platform':self.config.get('targetApp','vrchat'),'parameters':parameters,'sources':self.sources,'error':self.editor_error})
 
     @Slot(int)
@@ -110,6 +115,8 @@ class CompanionWindow(QObject):
 
     @Slot()
     def eyeHeightPreset(self):
+        if self.config.get('targetApp')=='chilloutvr':
+            self.openEditor(-1);self.editor['item']=chilloutvr.scale_mapping();self.editorChanged.emit();return
         items=self.config['profiles'].get(self.profile,[])
         target='/midsden/scale' if self.config.get('targetApp')=='resonite' else '/avatar/eyeheight'
         index=next((i for i,item in enumerate(items) if item['target']==target),-1)
@@ -170,7 +177,7 @@ class CompanionWindow(QObject):
 
     @Slot(str,result=str)
     def setTargetApp(self,target):
-        if target not in ('vrchat','resonite'):return 'Choose VRChat or Resonite.'
+        if target not in ('vrchat','resonite','chilloutvr'):return 'Choose VRChat, Resonite, or ChilloutVR.'
         if target==self.config.get('targetApp','vrchat'):return ''
         try:
             with self.lock:
@@ -185,17 +192,21 @@ class CompanionWindow(QObject):
                 except (ValueError,TypeError,AttributeError):host='127.0.0.1';port=resonite.DEFAULT_PORT if target=='resonite' else 9000
                 self.config.update(targetApp=target,oscHost=host,oscPort=port)
                 if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE,[resonite.scale_preset()])
+                elif target=='chilloutvr':self.config['profiles'].setdefault(chilloutvr.MANUAL_PROFILE,[])
                 try:core.save_config(self.config,settings_path())
                 except OSError:self.config=previous;raise
                 self.motion_epoch+=1
-            self.profile=resonite.PROFILE if target=='resonite' else 'manual'
+            self.profile=resonite.PROFILE if target=='resonite' else mapping.profile_key(None,target)
             self.discovery=None;self.detected=False;self.motion={'active':False,'outputs':{}}
-            self.status='Resonite OSC · receiver unverified' if target=='resonite' else 'Waiting for VRChat'
+            self.status='Resonite OSC · receiver unverified' if target=='resonite' else 'Waiting for '+{'chilloutvr':'ChilloutVR','vrchat':'VRChat'}[target]
             self.stateChanged.emit();return ''
         except OSError as error:return str(error)
 
     @Slot()
     def copyResoniteSetup(self):
+        if self.config.get('targetApp')=='chilloutvr':
+            QGuiApplication.clipboard().setText(chilloutvr.setup_text(self.config,self.config['profiles'].get(self.profile,[]),self.sources))
+            self.status='ChilloutVR setup copied';self.stateChanged.emit();return
         QGuiApplication.clipboard().setText(resonite.setup_text(self.config,self.config['profiles'].get(resonite.PROFILE,[]),self.sources))
         self.status='Resonite setup copied';self.stateChanged.emit()
 
@@ -243,14 +254,17 @@ class CompanionWindow(QObject):
         while not self.events.empty():
             event=self.events.get_nowait()
             if self.stop_event.is_set():continue
+            app=self.config.get('targetApp','vrchat')
+            label=event[3] if event[0]=='data' and len(event)>3 else event[2] if event[0] in ('connection','status') and len(event)>2 else None
+            if label is not None and label!=app:continue
             changed=True
             if event[0]=='connection':self.detected=False if self.config.get('targetApp')=='resonite' else event[1]
             elif event[0]=='status':self.status=event[1]
             elif event[0]=='motion':self.motion=event[1]
             else:
-                self.sources,self.discovery=event[1:]
+                self.sources,self.discovery=event[1:3]
                 if self.config.get('targetApp')=='resonite':self.discovery=None
-                self.profile=resonite.PROFILE if self.config.get('targetApp')=='resonite' else mapping.profile_key(self.discovery)
+                self.profile=resonite.PROFILE if self.config.get('targetApp')=='resonite' else mapping.profile_key(self.discovery,self.config.get('targetApp','vrchat'))
                 if self.editor and self.editor['profile']!=self.profile:
                     self.editor_error='Avatar changed. Reopen this mapping before saving.'
         if changed:self.stateChanged.emit()
@@ -265,44 +279,57 @@ class CompanionWindow(QObject):
         ever_detected=False
         reconnect=0
         last_generation=0
-        last_profile='manual'
+        last_profile='manual';last_app=None
         while not stop.is_set():
-            with self.lock: config = copy.deepcopy(self.config)
+            with self.lock: config = copy.deepcopy(self.config);request_epoch=self.motion_epoch
             try:
+                app=config.get('targetApp','vrchat')
+                if app!=last_app:
+                    known_port=None;was_detected=False;ever_detected=False;last_browse=0
+                    last_profile=mapping.profile_key(None,app);last_app=app;sender.clear()
                 browse = time.monotonic()-last_browse>30
                 is_resonite=config.get('targetApp')=='resonite'
                 discovery = None if is_resonite else mapping.discover(config,known_port,browse=browse)
+                with self.lock:
+                    if request_epoch!=self.motion_epoch:continue
                 if browse: last_browse=time.monotonic()
                 if discovery: known_port=discovery['queryPort']
                 if discovery and not was_detected:reconnect+=1
                 was_detected=bool(discovery)
-                self.events.put(('connection',bool(discovery)))
+                self.events.put(('connection',bool(discovery),app))
                 with self.lock:requested_generation=self.resend_generation;epoch=self.motion_epoch
                 if not is_resonite and not discovery and ever_detected and requested_generation==last_generation:
                     sender.clear()
-                    self.events.put(('status','VRChat discovery lost · waiting to reconnect'))
+                    self.events.put(('status',('ChilloutVR' if app=='chilloutvr' else 'VRChat')+' discovery lost · waiting to reconnect',app))
                     stop.wait(core.DEFAULT_POLL_SECONDS)
                     continue
                 ever_detected=ever_detected or bool(discovery)
-                profile = resonite.PROFILE if is_resonite else last_profile if not discovery and ever_detected else mapping.profile_key(discovery)
+                profile = resonite.PROFILE if is_resonite else last_profile if not discovery and ever_detected else mapping.profile_key(discovery,app)
                 last_profile=profile
                 with self.lock:
+                    if request_epoch!=self.motion_epoch:continue
                     if profile not in self.config['profiles']:
-                        self.config['profiles'][profile]=[resonite.scale_preset() if is_resonite else mapping.eye_height_preset()]
+                        self.config['profiles'][profile]=[] if app=='chilloutvr' else [resonite.scale_preset() if is_resonite else mapping.eye_height_preset()]
                         core.save_config(self.config,settings_path())
+                    if app=='chilloutvr' and discovery and discovery.get('oscPort') and self.config.get('targetApp')==app:
+                        port=discovery['oscPort']
+                        if self.config['oscPort']!=port:
+                            self.config['oscPort']=port;self.config.setdefault('oscDestinations',{})[app]={'host':self.config['oscHost'],'port':port}
+                            self.motion_epoch+=1;core.save_config(self.config,settings_path())
                     config=copy.deepcopy(self.config)
                     generation=self.resend_generation;epoch=self.motion_epoch
                 sources = mapping.fetch_measurements(config)
                 if epoch!=self.motion_epoch:continue
-                self.events.put(('data',sources,discovery))
+                self.events.put(('data',sources,discovery,app))
                 items=config.get('profiles',{}).get(profile,[])
                 sender.submit((config['oscHost'],config['oscPort'],profile,None if is_resonite else known_port,reconnect,generation),config,items,sources,discovery)
-                active=sum(i.get('enabled',True) for i in items)
+                source_map={s['id']:s for s in sources}
+                active=sum(i.get('enabled',True) and mapping.can_send(i,source_map,discovery) for i in items)
                 skipped=0;sent=0
                 last_generation=generation
-                self.events.put(('status',('Resonite OSC · receiver unverified · ' if is_resonite else '')+f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else '')))
+                self.events.put(('status',('Resonite OSC · receiver unverified · ' if is_resonite else 'Waiting for ChilloutVR · enable OSC · ' if app=='chilloutvr' and not discovery else '')+f"{active} active mapping{'s' if active != 1 else ''} · "+(f'{sent} updated' if sent else 'Up to date')+(f' · {skipped} unavailable' if skipped else ''),app))
             except (OSError,ValueError,RuntimeError) as error:
-                self.events.put(('status',str(error)))
+                self.events.put(('status',str(error),app))
             stop.wait(core.DEFAULT_POLL_SECONDS)
         sender.close()
 

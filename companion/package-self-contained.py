@@ -32,6 +32,8 @@ TARGETS = {
 }
 APP_FILES = (
     "README.md",
+    "RESONITE.md",
+    "CHILLOUTVR.md",
     "Start Companion.bat",
     "Start Companion.command",
     "start-companion-windows.ps1",
@@ -41,6 +43,7 @@ APP_FILES = (
     "desktop.py",
     "avatar_mapping.py",
     "resonite.py",
+    "chilloutvr.py",
     "measurement_format.py",
     "measurement-units.json",
 )

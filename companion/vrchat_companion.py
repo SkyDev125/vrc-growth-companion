@@ -92,7 +92,7 @@ def load_config(path: Path | None = None) -> dict:
         raise ValueError("OSCQuery port must be between 1 and 65535.")
     config = {"serverUrl": base_url, "oscHost": osc_host, "oscPort": port,
               "oscQueryPort": query_port}
-    config['targetApp'] = data.get('targetApp','vrchat') if data.get('targetApp') in ('vrchat','resonite') else 'vrchat'
+    config['targetApp'] = data.get('targetApp','vrchat') if data.get('targetApp') in ('vrchat','resonite','chilloutvr') else 'vrchat'
     config['oscDestinations'] = data.get('oscDestinations',{}) if isinstance(data.get('oscDestinations'),dict) else {}
     config['profiles'] = data.get('profiles', {}) if isinstance(data.get('profiles'), dict) else {}
     config['growthOptions'] = growth_options(data.get('growthOptions'))
@@ -130,7 +130,7 @@ def configure(path: Path | None = None, ask_server_url: bool = True) -> Path:
         "oscPort": osc_port,
         "oscQueryPort": int(current.get("oscQueryPort", 9001)),
     }
-    config['targetApp'] = current.get('targetApp','vrchat') if current.get('targetApp') in ('vrchat','resonite') else 'vrchat'
+    config['targetApp'] = current.get('targetApp','vrchat') if current.get('targetApp') in ('vrchat','resonite','chilloutvr') else 'vrchat'
     config['oscDestinations'] = current.get('oscDestinations',{}) if isinstance(current.get('oscDestinations'),dict) else {}
     config['profiles'] = current.get('profiles', {}) if isinstance(current.get('profiles'), dict) else {}
     config['growthOptions'] = growth_options(current.get('growthOptions'))
@@ -219,8 +219,8 @@ def vrchat_osc_ready(host: str = DEFAULT_OSC_HOST, query_port: int = 9001) -> bo
 
 
 def run(config: dict, once: bool = False) -> int:
-    if config.get('targetApp')=='resonite':
-        print('Use the desktop companion for Resonite profiles.',file=sys.stderr)
+    if config.get('targetApp') in ('resonite','chilloutvr'):
+        print('Use the desktop companion for Resonite or ChilloutVR profiles.',file=sys.stderr)
         return 1
     import avatar_mapping as mappings
     sender = mappings.ChangedSender()

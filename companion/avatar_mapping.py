@@ -1,4 +1,4 @@
-"""Scalar OSC mappings, VRChat discovery and explicit Resonite receiver paths."""
+"""Scalar OSC mappings and platform-specific discovery for VRChat, Resonite and ChilloutVR."""
 import copy
 import ipaddress
 import json
@@ -9,6 +9,7 @@ import time
 from urllib.request import Request, build_opener
 import vrchat_companion as core
 import resonite
+import chilloutvr
 try:
     from zeroconf import Zeroconf, ServiceBrowser, ServiceListener, IPVersion
 except ImportError:
@@ -31,8 +32,9 @@ def parameter_address(value):
 
 def validate_mapping(mapping):
     result = copy.deepcopy(mapping)
-    if result.get('platform','vrchat') not in ('vrchat','resonite'):raise ValueError('Choose VRChat or Resonite.')
+    if result.get('platform','vrchat') not in ('vrchat','resonite','chilloutvr'):raise ValueError('Choose VRChat, Resonite, or ChilloutVR.')
     result['target'] = resonite.address(result.get('target','')) if result.get('platform')=='resonite' else parameter_address(result.get('target', ''))
+    if result.get('platform')=='chilloutvr' and result['target']=='/avatar/eyeheight':raise ValueError('Choose an avatar scaling parameter; ChilloutVR has no documented eye-height endpoint.')
     if not result.get('source') or result.get('kind') not in ('float', 'int', 'bool'):
         raise ValueError('Choose a website measurement and OSC value type.')
     if result['target'] == '/avatar/eyeheight' and (result['source'] != 'height' or result['kind'] != 'float'):
@@ -88,6 +90,7 @@ def mapped_value(mapping, source):
 
 def encode_parameter(address, kind, value, platform='vrchat'):
     address = resonite.address(address) if platform=='resonite' else parameter_address(address)
+    if platform=='chilloutvr' and address=='/avatar/eyeheight':raise ValueError('Choose a ChilloutVR avatar parameter.')
     if platform=='resonite' and kind=='bool':kind='int';value=int(bool(value))
     if kind == 'bool':
         tag, payload = ('T' if value else 'F'), b''
@@ -112,12 +115,12 @@ def send_mapping(config, mapping, source):
     return value
 
 
-def parse_tree(tree):
+def parse_tree(tree, platform='vrchat'):
     writable, all_parameters = {}, {}
-    avatar = None
+    avatar = None;avatar_profile=None
     eye_height=None;scaling_allowed=None
     def walk(node, path='/', inherited=0, depth=0):
-        nonlocal avatar,eye_height,scaling_allowed
+        nonlocal avatar,avatar_profile,eye_height,scaling_allowed
         if not isinstance(node, dict) or depth > 32:
             return
         path = node.get('FULL_PATH', path)
@@ -132,8 +135,11 @@ def parse_tree(tree):
         if path=='/avatar/eyeheightscalingallowed' and isinstance(values,list) and values and type(values[0]) is bool:scaling_allowed=values[0]
         if path == '/avatar/change':
             value = values[0] if isinstance(values, list) and values else values
-            if isinstance(value, str) and value.startswith('avtr_'):
+            if isinstance(value,str) and 0<len(value)<=256 and (value.startswith('avtr_') or platform=='chilloutvr') and not any(ord(c)<32 for c in value):
                 avatar = value
+        if path=='/avatar/profile/change' and platform=='chilloutvr':
+            value=values[0] if isinstance(values,list) and values else values
+            if type(value) in (str,int) and 0<len(str(value))<=256:avatar_profile=value
         if isinstance(path, str) and path.startswith(PREFIX):
             kind = KINDS.get(str(node.get('TYPE','')).lstrip(','))
             all_parameters[path] = {'kind': kind, 'writable': bool(access & 2)}
@@ -144,7 +150,9 @@ def parse_tree(tree):
             for key, child in contents.items():
                 walk(child, str(path).rstrip('/')+'/'+key, access, depth+1)
     walk(tree)
-    return {'avatar': avatar, 'parameters': writable, 'allParameters': all_parameters, 'eyeHeight':eye_height,'scalingAllowed':scaling_allowed}
+    result={'avatar':avatar,'parameters':writable,'allParameters':all_parameters,'eyeHeight':eye_height,'scalingAllowed':scaling_allowed}
+    if platform=='chilloutvr':result.update(platform=platform,avatarProfile=avatar_profile,eyeHeight=None,scalingAllowed=None)
+    return result
 
 
 def query_json(host, port, path='/'):
@@ -163,7 +171,7 @@ def query_json(host, port, path='/'):
         return value
 
 
-def mdns_ports(host, wait=1.2):
+def mdns_ports(host, wait=1.2, platform='vrchat'):
     if Zeroconf is None:
         return []
     ports = set()
@@ -173,7 +181,7 @@ def mdns_ports(host, wait=1.2):
         allowed.update(address.ip for adapter in ifaddr.get_adapters() for address in adapter.ips if isinstance(address.ip,str))
     class Listener(ServiceListener):
         def add_service(self, zc, service_type, name):
-            if 'vrchat' not in name.lower(): return
+            if ('chilloutvr' if platform=='chilloutvr' else 'vrchat') not in name.lower():return
             info = zc.get_service_info(service_type, name, timeout=700)
             if info and allowed.intersection(info.parsed_addresses()): ports.add(info.port)
         def update_service(self, zc, service_type, name): self.add_service(zc, service_type, name)
@@ -193,13 +201,19 @@ def discover(config, known_port=None, browse=True):
     host = core.validate_osc_host(config['oscHost'])
     ports = [known_port] if known_port else []
     if browse:
-        try: ports.extend(mdns_ports(host))
+        try: ports.extend(mdns_ports(host,platform=config.get('targetApp','vrchat')))
         except (OSError, RuntimeError): pass
     ports.append(config.get('oscQueryPort', 9001))
     for port in dict.fromkeys(p for p in ports if p):
         try:
+            platform=config.get('targetApp','vrchat')
+            info={}
+            if platform=='chilloutvr':
+                info=query_json(host,port,'/?HOST_INFO')
+                if not str(info.get('NAME','')).lower().startswith('chilloutvr'):continue
             tree = query_json(host, port)
-            result = parse_tree(tree)
+            result = parse_tree(tree,platform=platform)
+            if platform=='chilloutvr' and type(info.get('OSC_PORT')) is int and 1<=info['OSC_PORT']<=65535:result['oscPort']=info['OSC_PORT']
             if result['parameters'] or result['avatar'] or result['eyeHeight'] is not None:
                 result['queryPort'] = port
                 return result
@@ -228,6 +242,7 @@ def can_send(item, sources, discovery):
     if item.get('source') not in sources:
         return False
     if item.get('platform')=='resonite':return True
+    if item.get('platform')=='chilloutvr' and (not discovery or discovery.get('platform')!='chilloutvr'):return False
     if item.get('target') == '/avatar/eyeheight':
         return True
     if discovery is not None:
@@ -235,7 +250,8 @@ def can_send(item, sources, discovery):
     return True
 
 
-def profile_key(discovery):
+def profile_key(discovery, platform='vrchat'):
+    if platform=='chilloutvr':return chilloutvr.profile_key(discovery)
     return (discovery or {}).get('avatar') or 'manual'
 
 
@@ -248,7 +264,7 @@ def migrate_profiles(config):
     profiles=config.setdefault('profiles',{})
     profiles.setdefault('manual',[])
     for key,items in profiles.items():
-        if key=='resonite':continue
+        if key=='resonite' or key.startswith('chilloutvr:'):continue
         if not any(item.get('target')=='/avatar/eyeheight' for item in items):
             items.insert(0,eye_height_preset(config.get('syncHeight',True)))
     config['mappingVersion']=2

@@ -11,6 +11,7 @@ on:
       - companion/smooth_growth.py
       - companion/avatar_mapping.py
       - companion/resonite.py
+      - companion/chilloutvr.py
       - companion/ui/**
       - companion/desktop.py
       - companion/vrchat_companion.py

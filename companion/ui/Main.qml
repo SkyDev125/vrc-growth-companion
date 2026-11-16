@@ -31,6 +31,10 @@ ApplicationWindow {
             for (var i = 0; i < state.rows.length; ++i) mappingModel.set(i, state.rows[i])
         }
         if (editor.visible && editorData.profile !== state.profile) editError = "Avatar changed. Reopen this mapping before saving."
+        else if (editor.visible) {
+            var latest = JSON.parse(bridge.editorJson)
+            if (JSON.stringify(parameter.parameters) !== JSON.stringify(latest.parameters)) parameter.parameters = latest.parameters || []
+        }
     }
     function saveGrowth(key,value) {
         var options=Object.assign({},state.growthOptions)
@@ -122,8 +126,8 @@ ApplicationWindow {
                     RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 9
                         Rectangle { width: 6; height: 6; radius: 3; color: window.state.paused ? "#dfc48d" : window.state.detected ? "#83c7b4" : "#8795a5"; Behavior on color { ColorAnimation { duration: 160 } } }
-                        Text { text: window.state.paused ? "Paused" : window.state.targetApp === "resonite" ? "Resonite OSC · receiver unverified" : window.state.detected ? "VRChat detected" : "Waiting for VRChat"; color: "#c6d6df"; font.pixelSize: 12; font.weight: Font.Medium }
-                        SmallText { text: window.state.targetApp === "resonite" ? "Resonite mappings" : window.state.profile === "manual" ? "Shared mappings" : "Avatar · " + window.state.profile.slice(-8); Layout.leftMargin: 9 }
+                        Text { text: window.state.paused ? "Paused" : window.state.targetApp === "resonite" ? "Resonite OSC · receiver unverified" : window.state.detected ? window.state.targetName + " detected" : "Waiting for " + window.state.targetName; color: "#c6d6df"; font.pixelSize: 12; font.weight: Font.Medium }
+                        SmallText { text: window.state.targetApp === "resonite" ? "Resonite mappings" : (window.state.profile === "manual" || window.state.profile === "chilloutvr:manual") ? "Shared mappings" : "Avatar · " + window.state.profile.slice(-8); Layout.leftMargin: 9 }
                         Item { Layout.fillWidth: true }
                         SmallText { text: window.state.sourceCount + " measurements" }
                     }
@@ -213,7 +217,7 @@ ApplicationWindow {
         x: presetsButton.width - width; y: presetsButton.height + 6; width: 190; padding: 6
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { radius: 10; color: "#202c3a"; border.color: "#3a485a" }
-        contentItem: ActionButton { text: window.state.targetApp === "resonite" ? "Avatar scale" : "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
+        contentItem: ActionButton { text: window.state.targetApp === "chilloutvr" ? "Scale mapping" : window.state.targetApp === "resonite" ? "Avatar scale" : "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
     }
     Popup {
         id: editor
@@ -443,8 +447,8 @@ ApplicationWindow {
                                 Layout.fillWidth:true
                                 FieldLabel { text:"App" }
                                 SelectField { objectName:"targetApp";Layout.preferredWidth:170
-                                    model:[{label:"VRChat",value:"vrchat"},{label:"Resonite",value:"resonite"}]
-                                    currentIndex:window.state.targetApp === "resonite" ? 1 : 0
+                                    model:[{label:"VRChat",value:"vrchat"},{label:"Resonite",value:"resonite"},{label:"ChilloutVR",value:"chilloutvr"}]
+                                    currentIndex:["vrchat","resonite","chilloutvr"].indexOf(window.state.targetApp)
                                     onActivated:{window.connectionError=bridge.setTargetApp(currentValue);hostInput.text=window.state.host;portInput.text=String(window.state.port)}
                                 }
                             }
@@ -455,11 +459,11 @@ ApplicationWindow {
                                 InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.preferredWidth:180 }
                                 InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.preferredWidth:80 }
                             }
-                            Text { visible:window.state.targetApp === "resonite";text:"Requires an in-world OSC receiver.";color:"#acb8c5";font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true }
+                            Text { visible:window.state.targetApp !== "vrchat";text:window.state.targetApp === "resonite" ? "Requires an in-world OSC receiver." : "Enable OSC; scaling needs an avatar parameter.";color:"#acb8c5";font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
                             RowLayout {
                                 Layout.fillWidth: true
-                                ActionButton { visible:window.state.targetApp === "resonite";text:"Copy setup";quiet:true;onClicked:bridge.copyResoniteSetup() }
+                                ActionButton { visible:window.state.targetApp !== "vrchat";text:"Copy setup";quiet:true;onClicked:bridge.copyResoniteSetup() }
                                 Item { Layout.fillWidth: true }
                                 ActionButton { objectName:"saveConnection"; text:"Save connection"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
                             }

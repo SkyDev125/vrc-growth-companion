@@ -125,3 +125,57 @@ class DesktopTests(unittest.TestCase):
   discover.assert_not_called()
   self.assertEqual(len(writes),1);self.assertEqual(writes[0]['target'],'/midsden/scale')
   self.assertEqual(writes[0]['platform'],'resonite')
+ def test_chilloutvr_profiles_preset_and_game_switching(self):
+  import chilloutvr
+  original=copy.deepcopy(self.window.config['profiles']['manual'])
+  self.window.saveConnection('127.0.0.1','19000')
+  self.assertEqual(self.window.setTargetApp('chilloutvr'),'')
+  self.assertEqual(self.window.config['profiles'][self.window.profile],[])
+  self.window.eyeHeightPreset();item=self.window.editor['item']
+  self.assertEqual(item['target'],'');self.assertEqual(item['mode'],'range')
+  self.assertNotIn('/avatar/eyeheight',[p['address'] for p in json.loads(self.window.editorJson)['parameters']])
+  item['target']='ScaleSlider';item.update(inputMin=1,inputMax=5,outputMin=0,outputMax=1)
+  self.assertEqual(self.window.saveMapping(json.dumps(item)),'')
+  saved=copy.deepcopy(self.window.config['profiles'][self.window.profile])
+  self.window.saveConnection('127.0.0.1','19003')
+  self.window.setTargetApp('resonite');self.window.setTargetApp('vrchat')
+  self.assertEqual(self.window.config['oscPort'],19000)
+  self.assertEqual(self.window.config['profiles']['manual'],original)
+  self.window.setTargetApp('chilloutvr')
+  self.assertEqual(self.window.config['oscPort'],19003)
+  self.assertEqual(self.window.config['profiles'][self.window.profile],saved)
+  self.window.copyResoniteSetup()
+  self.assertIn('ScaleSlider',self.app.clipboard().text())
+  self.assertIn('authored',self.app.clipboard().text())
+  self.assertEqual(desktop.core.load_config(Path(self.temp.name)/'config.json')['targetApp'],'chilloutvr')
+ def test_queued_other_game_discovery_is_ignored(self):
+  self.window.setTargetApp('chilloutvr')
+  self.window.events.put(('connection',True,'vrchat'))
+  self.window.events.put(('data',[],{'avatar':'avtr_old','parameters':{}},'vrchat'))
+  self.window.events.put(('status','Old game status','vrchat'));self.window.drain()
+  self.assertEqual(self.window.profile,'chilloutvr:manual');self.assertFalse(self.window.detected)
+  self.assertEqual(len(self.window.sources),1)
+  self.assertNotEqual(self.window.status,'Old game status')
+ def test_chilloutvr_worker_uses_advertised_port_and_matching_profile(self):
+  from test_chilloutvr import query_tree
+  d=desktop.mapping.parse_tree(query_tree(),'chilloutvr');d.update(oscPort=19003,queryPort=49000)
+  self.window.setTargetApp('chilloutvr')
+  profile=desktop.mapping.profile_key(d,'chilloutvr')
+  self.window.config['profiles'][profile]=[{**desktop.chilloutvr.scale_mapping(),'target':'/avatar/parameters/ScaleSlider'}]
+  stop=threading.Event();writes=[]
+  with patch.object(stop,'wait',side_effect=lambda _:stop.set()),patch.object(desktop.mapping,'discover',return_value=d),patch.object(desktop.mapping,'fetch_measurements',return_value=self.window.sources),patch.object(desktop.mapping,'send_mapping',side_effect=lambda c,i,s:writes.append((c['oscPort'],i['platform']))):
+   self.window.sync(stop)
+  self.assertEqual(writes,[(19003,'chilloutvr')])
+  self.window.drain()
+  self.assertEqual(self.window.profile,profile);self.assertTrue(self.window.detected)
+  self.assertEqual(self.window.config['oscDestinations']['chilloutvr']['port'],19003)
+ def test_game_change_during_discovery_discards_old_result(self):
+  stop=threading.Event();writes=[]
+  def discover(*args,**kwargs):
+   self.window.setTargetApp('chilloutvr');stop.set()
+   return {'avatar':'avtr_old','queryPort':9001,'parameters':{}}
+  with patch.object(desktop.mapping,'discover',side_effect=discover),patch.object(desktop.mapping,'fetch_measurements') as fetch,patch.object(desktop.mapping,'send_mapping',side_effect=lambda *args:writes.append(args)):
+   self.window.sync(stop)
+  fetch.assert_not_called();self.assertEqual(writes,[])
+  self.window.drain();self.assertEqual(self.window.profile,'chilloutvr:manual')
+  self.assertNotIn('avtr_old',self.window.config['profiles'])
