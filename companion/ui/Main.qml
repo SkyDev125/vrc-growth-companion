@@ -377,7 +377,7 @@ ApplicationWindow {
                         columns: 2; columnSpacing: 28; rowSpacing: 0
                         ColumnLayout {
                             objectName: "growthSettingsColumn"
-                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0; Layout.maximumWidth: (settingsScroll.width - 28) / 2; Layout.alignment: Qt.AlignTop
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 285; Layout.alignment: Qt.AlignTop
                             spacing: 12
                             SmallText { text: "GROWTH"; color: "#dfc48d"; font.letterSpacing: 1 }
                             RowLayout {
@@ -440,7 +440,7 @@ ApplicationWindow {
                         }
                         ColumnLayout {
                             objectName: "connectionSettingsColumn"
-                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0; Layout.maximumWidth: (settingsScroll.width - 28) / 2; Layout.alignment: Qt.AlignTop
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 260; Layout.alignment: Qt.AlignTop
                             spacing: 12
                             SmallText { text: "CONNECTION"; color: "#dfc48d"; font.letterSpacing: 1 }
                             RowLayout {
@@ -452,27 +452,19 @@ ApplicationWindow {
                                     onActivated:{window.connectionError=bridge.setTargetApp(currentValue);hostInput.text=window.state.host;portInput.text=String(window.state.port)}
                                 }
                             }
-                            Item {
-                                Layout.fillWidth:true; Layout.minimumWidth:0; Layout.maximumWidth:parent.width
-                                implicitHeight:64
-                                Column {
-                                    anchors.left:parent.left; anchors.right:portColumn.left; anchors.rightMargin:12; spacing:6
-                                    Text { text:"IP address"; color:"#acb8c5"; font.pixelSize:12 }
-                                    InputField { id:hostInput;objectName:"hostInput";width:parent.width }
-                                }
-                                Column {
-                                    id:portColumn
-                                    width:88; anchors.right:parent.right; spacing:6
-                                    Text { text:"OSC port"; color:"#acb8c5"; font.pixelSize:12 }
-                                    InputField { id:portInput;objectName:"portInput";width:parent.width }
-                                }
+                            GridLayout {
+                                columns:2;columnSpacing:12;rowSpacing:6;Layout.fillWidth:true
+                                FieldLabel { text:"IP address" }
+                                FieldLabel { text:"OSC port" }
+                                InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.preferredWidth:180 }
+                                InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.preferredWidth:80 }
                             }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
                             RowLayout {
                                 Layout.fillWidth: true
                                 ActionButton { objectName:"openSetupGuide";text:"Setup guide";quiet:true;onClicked:{settings.close();setupGuide.open()} }
                                 Item { Layout.fillWidth: true }
-                                ActionButton { objectName:"saveConnection"; text:"Save connection"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
+                                ActionButton { objectName:"saveConnection"; text:"Save"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
                             }
                         }
                     }
