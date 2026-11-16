@@ -179,7 +179,11 @@ class QuickInterfaceTests(unittest.TestCase):
     field=self.root.findChild(QObject,name)
     first=field.mapToScene(field.boundingRect().topLeft());last=field.mapToScene(field.boundingRect().bottomRight())
     self.assertGreaterEqual(first.x(),top.x()-.1,name);self.assertGreaterEqual(first.y(),top.y()-.1,name)
-    self.assertLessEqual(last.x(),bottom.x()+.1,name);self.assertLessEqual(last.y(),bottom.y()+.1,name)
+    chain=[];node=field
+    while node:
+     chain.append((node.objectName(),round(node.x(),1),round(node.width(),1),round(node.implicitWidth(),1)))
+     node=node.parentItem()
+    self.assertLessEqual(last.x(),bottom.x()+.1,str(chain));self.assertLessEqual(last.y(),bottom.y()+.1,name)
   self.assertFalse(self.warnings,self.warnings)
  def test_resonite_settings_and_mapping_picker(self):
   self.bridge.setSmoothGrowth(True)

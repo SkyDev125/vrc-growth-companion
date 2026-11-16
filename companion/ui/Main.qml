@@ -377,7 +377,7 @@ ApplicationWindow {
                         columns: 2; columnSpacing: 28; rowSpacing: 0
                         ColumnLayout {
                             objectName: "growthSettingsColumn"
-                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 285; Layout.alignment: Qt.AlignTop
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0; Layout.maximumWidth: (settingsScroll.width - 28) / 2; Layout.alignment: Qt.AlignTop
                             spacing: 12
                             SmallText { text: "GROWTH"; color: "#dfc48d"; font.letterSpacing: 1 }
                             RowLayout {
@@ -440,7 +440,7 @@ ApplicationWindow {
                         }
                         ColumnLayout {
                             objectName: "connectionSettingsColumn"
-                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 260; Layout.alignment: Qt.AlignTop
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 0; Layout.maximumWidth: (settingsScroll.width - 28) / 2; Layout.alignment: Qt.AlignTop
                             spacing: 12
                             SmallText { text: "CONNECTION"; color: "#dfc48d"; font.letterSpacing: 1 }
                             RowLayout {
@@ -453,7 +453,7 @@ ApplicationWindow {
                                 }
                             }
                             RowLayout {
-                                Layout.fillWidth:true; spacing:12
+                                Layout.fillWidth:true; Layout.minimumWidth:0; spacing:12
                                 ColumnLayout {
                                     Layout.fillWidth:true; Layout.minimumWidth:0; spacing:6
                                     FieldLabel { text:"IP address" }
