@@ -452,17 +452,19 @@ ApplicationWindow {
                                     onActivated:{window.connectionError=bridge.setTargetApp(currentValue);hostInput.text=window.state.host;portInput.text=String(window.state.port)}
                                 }
                             }
-                            RowLayout {
-                                Layout.fillWidth:true; Layout.minimumWidth:0; spacing:12
-                                ColumnLayout {
-                                    Layout.fillWidth:true; Layout.minimumWidth:0; spacing:6
-                                    FieldLabel { text:"IP address" }
-                                    InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.minimumWidth:0 }
+                            Item {
+                                Layout.fillWidth:true; Layout.minimumWidth:0; Layout.maximumWidth:parent.width
+                                implicitHeight:64
+                                Column {
+                                    anchors.left:parent.left; anchors.right:portColumn.left; anchors.rightMargin:12; spacing:6
+                                    Text { text:"IP address"; color:"#acb8c5"; font.pixelSize:12 }
+                                    InputField { id:hostInput;objectName:"hostInput";width:parent.width }
                                 }
-                                ColumnLayout {
-                                    Layout.preferredWidth:88; Layout.minimumWidth:88; Layout.maximumWidth:88; spacing:6
-                                    FieldLabel { text:"OSC port" }
-                                    InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.minimumWidth:0 }
+                                Column {
+                                    id:portColumn
+                                    width:88; anchors.right:parent.right; spacing:6
+                                    Text { text:"OSC port"; color:"#acb8c5"; font.pixelSize:12 }
+                                    InputField { id:portInput;objectName:"portInput";width:parent.width }
                                 }
                             }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
