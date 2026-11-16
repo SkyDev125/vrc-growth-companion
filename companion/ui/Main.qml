@@ -456,8 +456,8 @@ ApplicationWindow {
                                 columns:2;columnSpacing:12;rowSpacing:6;Layout.fillWidth:true
                                 FieldLabel { text:"IP address" }
                                 FieldLabel { text:"OSC port" }
-                                InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.preferredWidth:180 }
-                                InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.preferredWidth:80 }
+                                InputField { id:hostInput;objectName:"hostInput";Layout.fillWidth:true;Layout.minimumWidth:0;Layout.preferredWidth:180 }
+                                InputField { id:portInput;objectName:"portInput";Layout.fillWidth:true;Layout.minimumWidth:0;Layout.preferredWidth:80 }
                             }
                             Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
                             RowLayout {
