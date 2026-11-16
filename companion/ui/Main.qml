@@ -328,99 +328,135 @@ ApplicationWindow {
     }
     Popup {
         id: settings
-        objectName:"settingsPopup"
-        height:Math.min(settingsLayout.implicitHeight+48,window.height-40)
-        anchors.centerIn: parent; width: 430; padding: 24; modal: true; focus: true
+        objectName: "settingsPopup"
+        anchors.centerIn: parent
+        width: Math.min(720, window.width - 48)
+        height: Math.min(settingsLayout.implicitHeight + 48, window.height - 40)
+        padding: 24; modal: true; focus: true
         closePolicy: Popup.CloseOnEscape
         background: Rectangle { radius: 18; color: "#18212d"; border.color: "#405067" }
         Overlay.modal: Rectangle { color: "#a6080d15" }
         contentItem: ColumnLayout {
-            id:settingsLayout
-            spacing: 12
-            Text { text: "Settings"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
-            ScrollView {
-                id:settingsScroll
-                objectName:"settingsScroll"
-                Layout.fillWidth:true; Layout.fillHeight:true; Layout.minimumHeight:0
-                implicitHeight:settingsFields.implicitHeight
-                contentWidth:availableWidth;clip:true
-                ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
-                ColumnLayout {
-                    id:settingsFields
-                    width:settingsScroll.availableWidth;spacing:12
-            RowLayout {
-                Layout.fillWidth:true
-                FieldLabel { text:"Growth" }
-                SelectField { objectName:"growthMode"; Layout.preferredWidth:170
-                    model:[{label:"Instant",value:false},{label:"Smooth",value:true}]
-                    currentIndex:window.state.smoothGrowth ? 1 : 0
-                    onActivated:bridge.setSmoothGrowth(currentValue)
-                }
-            }
-            ColumnLayout {
-                Layout.fillWidth:true;spacing:10;visible:window.state.smoothGrowth
-                RowLayout {
-                    Layout.fillWidth:true
-                    FieldLabel { text:"Pace" }
-                    SelectField { objectName:"growthPace";Layout.preferredWidth:180
-                        model:[{label:"Very slow · ¼×",value:0.25},{label:"Slow · ½×",value:0.5},{label:"Normal",value:1},{label:"Fast · 2×",value:2},{label:"Very fast · 4×",value:4}]
-                        currentIndex:[0.25,0.5,1,2,4].indexOf(window.state.growthOptions.speed)
-                        onActivated:window.saveGrowth("speed",currentValue)
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth:true
-                    FieldLabel { text:"Curve" }
-                    SelectField { objectName:"growthCurve";Layout.preferredWidth:180
-                        model:[{label:"Gentle",value:"gentle"},{label:"Steady",value:"steady"},{label:"Quick start",value:"quickStart"}]
-                        currentIndex:["gentle","steady","quickStart"].indexOf(window.state.growthOptions.curve)
-                        onActivated:window.saveGrowth("curve",currentValue)
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth:true
-                    FieldLabel { text:"Maximum duration" }
-                    InputField { id:growthMaximum;objectName:"growthMaximum";Layout.preferredWidth:70
-                        Component.onCompleted:text=String(window.state.growthOptions.maxDuration)
-                        Connections {
-                            target:window
-                            function onStateChanged() {
-                                if (!growthMaximum.activeFocus) growthMaximum.text=String(window.state.growthOptions.maxDuration)
-                            }
-                        }
-                        validator:IntValidator {bottom:3;top:120}
-                        onTextEdited:window.growthError=acceptableInput ? "" : "Use 3–120 seconds."
-                        onEditingFinished:window.saveGrowth("maxDuration",Number(text))
-                    }
-                    SmallText {text:"seconds"}
-                }
-                RowLayout {
-                    Layout.fillWidth:true
-                    SmallText {text:"Changes apply immediately";Layout.fillWidth:true}
-                    ActionButton {objectName:"resetGrowth";text:"Reset";quiet:true;onClicked:{window.growthError=bridge.saveGrowthOptions("{}");growthMaximum.text=String(window.state.growthOptions.maxDuration)}}
-                }
-                Text {text:window.growthError;color:"#f1a49c";visible:text.length>0;Layout.fillWidth:true;wrapMode:Text.WordWrap;font.pixelSize:12}
-            }
-            FieldLabel { text: "VRChat IP address" }
-            InputField { id: hostInput; Layout.fillWidth: true }
-            FieldLabel { text: "OSC receive port" }
-            InputField { id: portInput; Layout.fillWidth: true }
-                }
-            }
-            Text { text: window.connectionError; color: "#f1a49c"; visible: text.length > 0; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            id: settingsLayout
+            spacing: 18
             RowLayout {
                 Layout.fillWidth: true
+                Text { text: "Settings"; color: "#eef2f7"; font.pixelSize: 20; font.weight: Font.DemiBold }
                 Item { Layout.fillWidth: true }
-                ActionButton { text: "Cancel"; quiet: true; onClicked: settings.close() }
-                ActionButton { objectName:"saveConnection"; text: "Save connection"; primary: true; onClicked: { window.connectionError = bridge.saveConnection(hostInput.text,portInput.text); if (!window.connectionError) settings.close() } }
+                ActionButton { text: "×"; quiet: true; onClicked: settings.close(); Accessible.name: "Close settings" }
+            }
+            Item {
+                id: settingsBody
+                Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0
+                implicitHeight: settingsFields.implicitHeight
+                Flickable {
+                    id: settingsScroll
+                    objectName: "settingsScroll"
+                    anchors.fill: parent
+                    anchors.rightMargin: contentHeight > height + 1 ? 16 : 0
+                    contentWidth: width; contentHeight: settingsFields.implicitHeight
+                    interactive: contentHeight > height + 1
+                    boundsBehavior: Flickable.StopAtBounds; clip: true
+                    ScrollBar.vertical: ScrollBar {
+                        objectName: "settingsScrollbar"
+                        parent: settingsBody
+                        x: settingsBody.width - width; y: 0; width: 6; height: settingsScroll.height
+                        visible: settingsScroll.contentHeight > settingsScroll.height + 1
+                    }
+                    GridLayout {
+                        id: settingsFields
+                        width: settingsScroll.width
+                        columns: 2; columnSpacing: 28; rowSpacing: 0
+                        ColumnLayout {
+                            objectName: "growthSettingsColumn"
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 285; Layout.alignment: Qt.AlignTop
+                            spacing: 12
+                            SmallText { text: "GROWTH"; color: "#dfc48d"; font.letterSpacing: 1 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                FieldLabel { text: "Mode" }
+                                SelectField {
+                                    objectName: "growthMode"; Layout.preferredWidth: 170
+                                    model: [{label:"Instant",value:false},{label:"Smooth",value:true}]
+                                    currentIndex: window.state.smoothGrowth ? 1 : 0
+                                    onActivated: bridge.setSmoothGrowth(currentValue)
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true; spacing: 10; visible: window.state.smoothGrowth
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    FieldLabel { text: "Pace" }
+                                    SelectField {
+                                        objectName: "growthPace"; Layout.preferredWidth: 170
+                                        model: [{label:"Very slow · ¼×",value:0.25},{label:"Slow · ½×",value:0.5},{label:"Normal",value:1},{label:"Fast · 2×",value:2},{label:"Very fast · 4×",value:4}]
+                                        currentIndex: [0.25,0.5,1,2,4].indexOf(window.state.growthOptions.speed)
+                                        onActivated: window.saveGrowth("speed",currentValue)
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    FieldLabel { text: "Curve" }
+                                    SelectField {
+                                        objectName: "growthCurve"; Layout.preferredWidth: 170
+                                        model: [{label:"Gentle",value:"gentle"},{label:"Steady",value:"steady"},{label:"Quick start",value:"quickStart"}]
+                                        currentIndex: ["gentle","steady","quickStart"].indexOf(window.state.growthOptions.curve)
+                                        onActivated: window.saveGrowth("curve",currentValue)
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    FieldLabel { text: "Maximum duration" }
+                                    InputField {
+                                        id: growthMaximum; objectName: "growthMaximum"; Layout.preferredWidth: 64
+                                        Component.onCompleted: text=String(window.state.growthOptions.maxDuration)
+                                        Connections {
+                                            target: window
+                                            function onStateChanged() {
+                                                if (!growthMaximum.activeFocus) growthMaximum.text=String(window.state.growthOptions.maxDuration)
+                                            }
+                                        }
+                                        validator: IntValidator { bottom: 3; top: 120 }
+                                        onTextEdited: window.growthError=acceptableInput ? "" : "Use 3–120 seconds."
+                                        onEditingFinished: window.saveGrowth("maxDuration",Number(text))
+                                    }
+                                    SmallText { text: "seconds" }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    SmallText { text: "Changes apply immediately"; Layout.fillWidth: true }
+                                    ActionButton { objectName:"resetGrowth"; text:"Reset"; quiet:true; onClicked:{window.growthError=bridge.saveGrowthOptions("{}");growthMaximum.text=String(window.state.growthOptions.maxDuration)} }
+                                }
+                                Text { text:window.growthError; color:"#f1a49c"; visible:text.length>0; Layout.fillWidth:true; wrapMode:Text.WordWrap; font.pixelSize:12 }
+                            }
+                        }
+                        ColumnLayout {
+                            objectName: "connectionSettingsColumn"
+                            Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.minimumWidth: 260; Layout.alignment: Qt.AlignTop
+                            spacing: 12
+                            SmallText { text: "CONNECTION"; color: "#dfc48d"; font.letterSpacing: 1 }
+                            FieldLabel { text: "VRChat IP address" }
+                            InputField { id: hostInput; objectName: "hostInput"; Layout.fillWidth: true }
+                            FieldLabel { text: "OSC receive port" }
+                            InputField { id: portInput; objectName: "portInput"; Layout.fillWidth: true }
+                            Text { text:window.connectionError; color:"#f1a49c"; visible:text.length>0; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                ActionButton { objectName:"saveConnection"; text:"Save connection"; primary:true; onClicked:{window.connectionError=bridge.saveConnection(hostInput.text,portInput.text);if(!window.connectionError)settings.close()} }
+                            }
+                        }
+                    }
+                }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#303b4a" }
             RowLayout {
                 Layout.fillWidth: true
                 SmallText { text: "Version " + window.state.update.version; Layout.fillWidth: true }
-                ActionButton { objectName: "checkUpdates"; text: "Check updates"; quiet: true; enabled: !window.state.update.busy; onClicked: bridge.checkUpdates() }
+                ActionButton { objectName:"checkUpdates"; text:"Check updates"; quiet:true; enabled:!window.state.update.busy; onClicked:bridge.checkUpdates() }
+                ActionButton { text: "Close"; quiet: true; onClicked: settings.close() }
             }
-            Text { text: window.state.update.message; visible: text.length > 0; color: "#acb8c5"; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
+            Text { text:window.state.update.message; visible:text.length>0; color:"#acb8c5"; wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:12 }
         }
     }
 }
