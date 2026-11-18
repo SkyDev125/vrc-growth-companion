@@ -50,6 +50,7 @@ jobs:
           grep '  mids-den-companion-linux-x64$' SHA256SUMS.txt | sha256sum --check --strict
           chmod +x mids-den-companion-linux-x64
       - name: Test in distro userland with a virtual display
+        shell: bash
         env:
           DISTRO_IMAGE: ${{ matrix.image }}
           DISTRO_FAMILY: ${{ matrix.family }}

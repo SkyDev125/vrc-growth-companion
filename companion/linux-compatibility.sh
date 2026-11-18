@@ -16,7 +16,7 @@ case "$family" in
     ;;
   opensuse)
     zypper --non-interactive refresh
-    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts libEGL1 libOpenGL0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 libxcb-xfixes0 libxcb-sync1 libxcb-shm0 libxcb-render0 libxcb-glx0 libxcb-xkb1
+    zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb ca-certificates dejavu-fonts libglvnd libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 libxcb-xfixes0 libxcb-sync1 libxcb-shm0 libxcb-render0 libxcb-glx0 libxcb-xkb1
     ;;
   *) echo "Unknown family: $family" >&2; exit 2 ;;
 esac
