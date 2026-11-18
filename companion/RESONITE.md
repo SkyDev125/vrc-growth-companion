@@ -1,53 +1,37 @@
-# Resonite OSC integration
+# Set your Resonite avatar’s height from Mid’s Den
 
-In Settings → Connection, choose **Resonite**. The companion keeps VRChat and Resonite mappings and destination ports separately. Our suggested Resonite port is **9002**; it is a convention you can change, not an official Resonite default. Set the same port on your in-world receiver. VRChat remains on its previous port when you switch back.
+If Mid’s Den says **3 m**, the **Avatar height** preset sends **3** to Resonite. Set up an OSC receiver and a small ProtoFlux graph once on the avatar you want to resize. After that, you can work in metres.
 
-Resonite has native generic OSC input. It has no universal `/avatar/eyeheight` endpoint or standard OSCQuery avatar-parameter catalogue. Suggested paths in this companion are receiver conventions, not automatically discovered fields. **Setup guide** walks through the receiver, mapping, calibration and verification steps inside the app, including your current mapping paths and types. This is a receiver setup guide, not a ready-to-import avatar asset. A receiver must be configured in-world once.
+## Send the height
 
-## Receiver
+In the companion, select **Settings → Connection → App → Resonite**. Leave the IP at `127.0.0.1` if both apps run on the same computer. Note the OSC port shown in Settings. It defaults to `9002`.
 
-1. Add `OSC_Receiver` to a slot on your avatar. Assign `HandlingUser` to the wearer, `Port` to the companion destination port, and `AccessReason` to “Mid's Den growth”. Accept the OSC-receiving permission prompt. `IsListening` should become true.
-2. Add `OSC_Value<float>` for each decimal mapping or `OSC_Value<int>` for whole-number/on-off mappings. Assign its `Handler` to that receiver, `Path` exactly to the path listed by the companion, and `ArgumentIndex` to 0. Observe `Value` to check reception. You can use `OSC_Field<T>` to drive a matching scalar field directly instead.
-3. Connect the values to the desired avatar fields or ProtoFlux. Custom paths can be entered directly in the mapping editor. Suggestions use `/midsden/measurements/<measurement-id>`; they stay stable when a measurement is renamed.
+Choose **Presets → Avatar height**, then **Save mapping**. The preset uses **Height**, **Current value**, and `/midsden/height`. Fresh Resonite profiles already include it.
 
-## Avatar scale preset
+## Receive it in Resonite
 
-**Presets → Avatar scale** maps Height to `/midsden/scale` using **Growth ratio**. A website starting height of 2 m and current height of 3 m sends **1.5**, not 3 metres. Resonite scale is dimensionless. It depends on avatar/user/world configuration, so a metre value is not a valid substitute for a scale multiplier.
+1. Wear the avatar. In its Scene Inspector, add an `OSC_Receiver` component. Set `HandlingUser` to yourself, `Port` to the companion’s port, and `AccessReason` to “Mid’s Den height”. Allow OSC receiving when prompted. Check that `IsListening` is on.
+2. Add `OSC_Value<float>`. Drag the receiver into `Handler`, enter `/midsden/height` in `Path`, and set `ArgumentIndex` to `0`.
+3. Click **Resend** in the companion. Check `OSC_Value.Value` in the inspector. It should show the website height in metres. If it stays at zero, check the receiver, port and path before building the graph.
 
-Calibrate in Resonite with the avatar at the website's starting height. Capture **User Root Global Scale** into a stored `BaselineScale` value. On changes to the received scale, calculate:
+See the [OSC Receiver](https://wiki.resonite.com/Component:OSC_Receiver) and [OSC Value](https://wiki.resonite.com/Component:OSC_Value) references for inspector screenshots.
 
-`target scale = BaselineScale × received /midsden/scale`
+## Connect the height to resizing
 
-Use **Set User Scale** with the wearer's UserRoot and that target. Set **AnimationTime = 0** because the companion already animates intermediate values. Resonite documents that a running Set User Scale animation blocks additional scale requests until it finishes. Guard execution so only the wearer handles these changes; `Local User Root` must not be used to scale other viewers of a shared object. Ignore uninitialized/non-positive received scale values.
+Resonite’s **Set User Scale** node expects a scale factor. An avatar that stands 2 m tall at scale 1 needs a scale of 1.5 to reach 3 m. A different avatar can need a different factor for the same target. [User scale](https://wiki.resonite.com/User_Scale) · [Set User Scale](https://wiki.resonite.com/ProtoFlux:SetUserScale)
 
-Keep the baseline constant during growth. Multiplying the incoming ratio by the current live scale would compound growth. Recalibrate for a different avatar or a changed baseline/parent scale. The companion cannot measure or calibrate a Resonite avatar through this one-way OSC connection.
+**Measure once.** Stand upright and measure the avatar in metres. Read **User Root Global Scale** from your avatar’s `UserRoot` at that same size. Divide the measured height by that scale and store it as a fixed float. For instance, 1.8 m measured at scale 0.9 gives a reference height of 2 m. Measure from the floor to the same point you mean by “height” on the website. Remeasure if you change the avatar’s proportions or the reference changes. [User Root Global Scale](https://wiki.resonite.com/ProtoFlux:UserRootGlobalScale)
 
-## Attributes and smoothing
+**Wire the value.** With the ProtoFlux Tool equipped, grab the `Value` field name on `OSC_Value<float>` and choose **Source** in the context menu. Connect it to a float **Divide** node. Use the incoming value as the first input and your fixed reference height as the second input. Connect **Divide** to `Scale` on **Set User Scale**. Connect the wearer to **User User Root** and wire its output to `UserRoot`. Set `AnimationTime` to `0` so the companion can handle smoothing. [Using the ProtoFlux Tool](https://wiki.resonite.com/ProtoFlux#Interfacing_With_Components_/_Slots)
 
-Value, ratio, range and threshold mappings work as in the existing companion. Decimals use OSC float32, whole numbers use int32, and on/off mappings use **int32 0/1** (compare against zero in ProtoFlux to obtain a bool). This avoids depending on undocumented OSC boolean support. Original units are preserved: a volume stays a volume, and custom units remain unchanged. Use range mapping if a receiver expects a different numeric range.
+**Call it when the height changes.** Connect the same **Source** to `Value` on **Fire On Change**. Set `OnlyForUser` to the avatar’s wearer. Connect `OnChanged` to an **If** node with the condition `Value > 0`, then connect its true output to the impulse input on **Set User Scale**. This skips the initial zero before the first packet arrives. Keep the setup scoped to the wearer. [Fire On Change](https://wiki.resonite.com/ProtoFlux:FireOnChange)
 
-The same opt-in Smooth mode, pace, curve, duration cap and Finish now controls apply. Linked measurements keep their linear/squared/cubic relationships. Resonite scale mappings are not subjected to VRChat's eye-height clamp; mapped floats still have OSC float32 limits. Receiver/world rules can impose additional restrictions.
+Test with a nearby height change in a world that allows resizing. If `Value` changes in the inspector and the avatar stays the same, check the graph’s impulse wiring, `UserRoot`, and the world’s scaling rules. **Resend** sends the latest value again after a receiver is reloaded. **Fire On Change** reacts when the received number changes.
 
-## Status and reconnects
+## Existing receivers and other measurements
 
-The app says **Resonite OSC · receiver unverified**. A successful UDP send is not a receipt acknowledgement. It does not claim the game is detected or the receiver is connected. Check the receiver and value in-world.
+An existing **Avatar scale (legacy)** mapping still sends the website’s current height divided by its starting height to `/midsden/scale`. Keep that mapping for an existing receiver. To switch the same avatar to the new preset, point the new graph at `/midsden/height` and disable the old resize mapping so both graphs do not drive the same avatar.
 
-Use **Resend** after equipping/reloading the receiver or changing worlds. At rest, unchanged values are not repeatedly sent, so a receiver created after the initial packet needs a deliberate resend. Pause and app/endpoint changes stop old outgoing transitions. Smooth growth with no observed initial Resonite size applies the first target once, then smooths later changes; it does not invent a starting height.
+For other measurements, use the exact path shown on the mapping, with `OSC_Value<float>` for decimals or `OSC_Value<int>` for whole numbers and on/off values. On/off arrives as `0` or `1`. **Current value** uses the measurement’s saved unit. Connect the received value to the avatar field or ProtoFlux graph for that property.
 
-## Research and validation
-
-Chosen transport: native generic OSC. ResoniteLink is an alternative, but it is beta and is enabled per session with host/builder/world permission restrictions. This first integration does not require ResoniteLink or a mod.
-
-Verified with real local UDP sockets, including scale ratios, custom addresses, int on/off values, unchanged-packet suppression, separate saved app destinations/profiles and UI switching. This environment has not run a live Resonite avatar; the in-world receiver/calibration instructions need an actual game check before claiming end-to-end validation.
-
-Official sources checked during implementation:
-
-- [OSC](https://wiki.resonite.com/OSC)
-- [OSC Receiver](https://wiki.resonite.com/Component:OSC_Receiver)
-- [OSC Value](https://wiki.resonite.com/Component:OSC_Value)
-- [OSC Field](https://wiki.resonite.com/Component:OSC_Field)
-- [User scale](https://wiki.resonite.com/User_Scale)
-- [Set User Scale](https://wiki.resonite.com/ProtoFlux:SetUserScale)
-- [User Root Global Scale](https://wiki.resonite.com/ProtoFlux:UserRootGlobalScale)
-- [ResoniteLink](https://wiki.resonite.com/ResoniteLink)
-- [Official ResoniteLink project](https://github.com/Yellow-Dog-Man/ResoniteLink)
+The companion’s **receiver unverified** status means it has sent UDP without a game acknowledgement. The outgoing metre values and legacy ratios are covered by local UDP tests. The resizing graph still needs validation on a live avatar.

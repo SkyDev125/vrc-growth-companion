@@ -103,7 +103,7 @@ class DesktopTests(unittest.TestCase):
   self.assertEqual(self.window.setTargetApp('resonite'),'')
   self.assertEqual(self.window.profile,'resonite');self.assertEqual(self.window.config['oscPort'],9002)
   self.window.openEditor(0)
-  self.assertEqual(json.loads(self.window.editorJson)['parameters'][0]['address'],'/midsden/scale')
+  self.assertEqual(json.loads(self.window.editorJson)['parameters'][0]['address'],'/midsden/height')
   self.assertEqual(self.window.saveMapping(json.dumps(self.window.editor['item'])),'')
   self.assertEqual(self.window.saveConnection('127.0.0.1','19002'),'')
   self.assertEqual(self.window.setTargetApp('vrchat'),'')
@@ -120,7 +120,7 @@ class DesktopTests(unittest.TestCase):
   with patch.object(stop,'wait',side_effect=lambda _:stop.set()),patch.object(desktop.mapping,'discover') as discover,patch.object(desktop.mapping,'fetch_measurements',return_value=self.window.sources),patch.object(desktop.mapping,'send_mapping',side_effect=lambda c,i,s:writes.append(i)):
    self.window.sync(stop)
   discover.assert_not_called()
-  self.assertEqual(len(writes),1);self.assertEqual(writes[0]['target'],'/midsden/scale')
+  self.assertEqual(len(writes),1);self.assertEqual(writes[0]['target'],'/midsden/height')
   self.assertEqual(writes[0]['platform'],'resonite')
  def test_chilloutvr_profiles_preset_and_game_switching(self):
   import chilloutvr
@@ -173,3 +173,17 @@ class DesktopTests(unittest.TestCase):
   fetch.assert_not_called();self.assertEqual(writes,[])
   self.window.drain();self.assertEqual(self.window.profile,'chilloutvr:manual')
   self.assertNotIn('avtr_old',self.window.config['profiles'])
+
+ def test_existing_resonite_receiver_survives_upgrade_and_new_preset_opens(self):
+  self.window.setTargetApp('resonite')
+  legacy={**desktop.resonite.height_preset(),'target':'/midsden/scale','mode':'ratio'}
+  self.window.config['profiles']['resonite']=[legacy]
+  self.window.persist()
+  reopened=desktop.CompanionWindow(auto_start=False)
+  try:
+   self.assertEqual(reopened.config['profiles']['resonite'],[legacy])
+   reopened.eyeHeightPreset()
+   self.assertEqual(reopened.editor['index'],-1)
+   self.assertEqual(reopened.editor['item']['target'],'/midsden/height')
+   self.assertEqual(reopened.editor['item']['mode'],'value')
+  finally:reopened.close()

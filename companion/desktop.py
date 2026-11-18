@@ -45,7 +45,7 @@ class CompanionWindow(QObject):
         mapping.migrate_profiles(self.config)
         if self.config.get('targetApp')=='resonite':
             self.profile=resonite.PROFILE
-            self.config['profiles'].setdefault(self.profile,[resonite.scale_preset()])
+            self.config['profiles'].setdefault(self.profile,[resonite.height_preset()])
         elif self.config.get('targetApp')=='chilloutvr':
             self.profile=chilloutvr.MANUAL_PROFILE
             self.config['profiles'].setdefault(self.profile,[])
@@ -62,6 +62,11 @@ class CompanionWindow(QObject):
     def stateJson(self):
         sources={s['id']:s for s in self.sources};rows=[]
         modes={'value':'Current value','ratio':'Growth ratio','range':'Mapped range','threshold':'On / off'}
+        target_labels = {
+            '/avatar/eyeheight': 'Eye height',
+            resonite.HEIGHT_PATH: 'Avatar height',
+            resonite.SCALE_PATH: 'Avatar scale (legacy)',
+        }
         for item in self.config['profiles'].get(self.profile,[]):
             source=sources.get(item['source']);enabled=item.get('enabled',True)
             output='Waiting';health='waiting'
@@ -80,7 +85,7 @@ class CompanionWindow(QObject):
                 output='Blocked';health='waiting'
             rows.append({'name':source['name'] if source else ('Height' if item['source']=='height' else item['source']),
                 'value':format_measurement(source['value'],source['unit']) if source else 'Waiting for website',
-                'target':'Avatar scale' if item['target']=='/midsden/scale' else 'Eye height' if item['target']=='/avatar/eyeheight' else item['target'].removeprefix(mapping.PREFIX),
+                'target':target_labels.get(item['target'], item['target'].removeprefix(mapping.PREFIX)),
                 'address':item['target'],'mode':modes[item['mode']],'kind':item['kind'],'mappingEnabled':enabled,'output':output,'health':health})
         return json.dumps({'rows':rows,'detected':self.detected,'paused':self.paused,'status':self.status,
             'profile':self.profile,'sourceCount':len(self.sources),'host':self.config['oscHost'],'port':self.config['oscPort'],
@@ -118,10 +123,10 @@ class CompanionWindow(QObject):
         if self.config.get('targetApp')=='chilloutvr':
             self.openEditor(-1);self.editor['item']=chilloutvr.scale_mapping();self.editorChanged.emit();return
         items=self.config['profiles'].get(self.profile,[])
-        target='/midsden/scale' if self.config.get('targetApp')=='resonite' else '/avatar/eyeheight'
+        target=resonite.HEIGHT_PATH if self.config.get('targetApp')=='resonite' else '/avatar/eyeheight'
         index=next((i for i,item in enumerate(items) if item['target']==target),-1)
         self.openEditor(index)
-        if index<0:self.editor['item']=resonite.scale_preset() if self.config.get('targetApp')=='resonite' else mapping.eye_height_preset();self.editorChanged.emit()
+        if index<0:self.editor['item']=resonite.height_preset() if self.config.get('targetApp')=='resonite' else mapping.eye_height_preset();self.editorChanged.emit()
 
     @Slot(str,result=str)
     def saveMapping(self,raw):
@@ -191,7 +196,7 @@ class CompanionWindow(QObject):
                     if not 1<=port<=65535:raise ValueError()
                 except (ValueError,TypeError,AttributeError):host='127.0.0.1';port=resonite.DEFAULT_PORT if target=='resonite' else 9000
                 self.config.update(targetApp=target,oscHost=host,oscPort=port)
-                if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE,[resonite.scale_preset()])
+                if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE,[resonite.height_preset()])
                 elif target=='chilloutvr':self.config['profiles'].setdefault(chilloutvr.MANUAL_PROFILE,[])
                 try:core.save_config(self.config,settings_path())
                 except OSError:self.config=previous;raise
@@ -301,7 +306,7 @@ class CompanionWindow(QObject):
                 with self.lock:
                     if request_epoch!=self.motion_epoch:continue
                     if profile not in self.config['profiles']:
-                        self.config['profiles'][profile]=[] if app=='chilloutvr' else [resonite.scale_preset() if is_resonite else mapping.eye_height_preset()]
+                        self.config['profiles'][profile]=[] if app=='chilloutvr' else [resonite.height_preset() if is_resonite else mapping.eye_height_preset()]
                         core.save_config(self.config,settings_path())
                     if app=='chilloutvr' and discovery and discovery.get('oscPort') and self.config.get('targetApp')==app:
                         port=discovery['oscPort']

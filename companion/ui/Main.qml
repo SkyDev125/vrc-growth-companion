@@ -60,7 +60,7 @@ ApplicationWindow {
         outMax.text = String(draft.outputMax === undefined ? 1 : draft.outputMax)
         threshold.text = String(draft.threshold === undefined ? 1 : draft.threshold)
         enabledToggle.checked = draft.enabled !== false
-        smoothMapping.checked = draft.smooth !== undefined ? draft.smooth : !!((draft.target === "/avatar/eyeheight" || draft.target === "/midsden/scale") || (editorData.sources[sourceSelect.currentIndex] || {}).syncTarget && editorData.sources[sourceSelect.currentIndex].syncTarget !== "none")
+        smoothMapping.checked = draft.smooth !== undefined ? draft.smooth : !!((draft.target === "/avatar/eyeheight" || draft.target === "/midsden/scale" || draft.target === "/midsden/height") || (editorData.sources[sourceSelect.currentIndex] || {}).syncTarget && editorData.sources[sourceSelect.currentIndex].syncTarget !== "none")
         editor.open()
     }
     function saveEditor() {
@@ -217,7 +217,7 @@ ApplicationWindow {
         x: presetsButton.width - width; y: presetsButton.height + 6; width: 190; padding: 6
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         background: Rectangle { radius: 10; color: "#202c3a"; border.color: "#3a485a" }
-        contentItem: ActionButton { text: window.state.targetApp === "chilloutvr" ? "Scale mapping" : window.state.targetApp === "resonite" ? "Avatar scale" : "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
+        contentItem: ActionButton { text: window.state.targetApp === "chilloutvr" ? "Scale mapping" : window.state.targetApp === "resonite" ? "Avatar height" : "Eye height"; quiet: true; onClicked: { presets.close(); bridge.eyeHeightPreset() } }
     }
     Popup {
         id: editor
@@ -272,7 +272,7 @@ ApplicationWindow {
                     Layout.preferredWidth: 340; Layout.fillWidth: true
                     onSelected: function(address,kind) {
                         kindSelect.currentIndex = ["float","int","bool"].indexOf(kind)
-                        if (address === "/avatar/eyeheight") {
+                        if (address === "/avatar/eyeheight" || address === "/midsden/height") {
                             smoothMapping.checked = true
                             sourceSelect.currentIndex = sourceSelect.model.findIndex(s => s.value === "height")
                             modeSelect.currentIndex = 0

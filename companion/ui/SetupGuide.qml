@@ -12,10 +12,32 @@ Popup {
     property var mappings: []
     property int step: 0
     property var steps: appId === "resonite" ? [
-        {title:"Create a receiver", body:"In Resonite, add an OSC_Receiver to a slot on your avatar. Set HandlingUser to the wearer, Port to " + port + " and AccessReason to Mid’s Den growth. Allow OSC receiving when prompted.", tip:"Saved destination · " + host + ":" + port, url:"https://wiki.resonite.com/Component:OSC_Receiver"},
-        {title:"Connect a measurement", body:"Create a mapping in the companion. In Resonite, add OSC_Value<float> for a decimal value, or OSC_Value<int> for a whole number or on/off value. Set Handler to your receiver, Path to the mapping’s exact receiver path, and ArgumentIndex to 0.", tip:"Wire Value to the avatar field or ProtoFlux you want to control. On/off values arrive as 0 or 1.", url:"https://wiki.resonite.com/Component:OSC_Value"},
-        {title:"Calibrate avatar scale", body:"For Presets → Avatar scale, first match your avatar to the website’s starting height. Store User Root Global Scale once as BaselineScale.\n\nTarget scale = BaselineScale × received /midsden/scale\n\nApply it with Set User Scale, the wearer’s UserRoot and AnimationTime = 0. Only the wearer should execute it; ignore zero or negative received values.", tip:"Keep the baseline fixed during growth. Recalibrate for a different avatar or baseline; multiplying the live scale would compound growth. Skip this step for other measurements.", url:"https://wiki.resonite.com/ProtoFlux:SetUserScale"},
-        {title:"Check it in-world", body:"OSC_Receiver.IsListening should be true. Use Resend in the companion and watch OSC_Value.Value change in-world. If the value arrives but nothing moves, check the field or ProtoFlux connection.", tip:"Resonite does not acknowledge UDP delivery. Resend after reloading a receiver or changing worlds; settled values are not repeatedly sent.", url:"https://wiki.resonite.com/OSC"}
+        {
+            title: "Send your target height",
+            body: "In the companion, open Presets → Avatar height and save the mapping. If the website says 3 m, the companion sends 3 to /midsden/height.",
+            tip: guide.mappings.some(m => m.address === "/midsden/scale" && m.mappingEnabled)
+                ? "You already have an Avatar scale mapping. Leave it active for your old receiver, or turn it off when you switch that avatar to the new height receiver."
+                : "Set up the receiver once on the avatar you want to resize. The next steps show how to do that in Resonite.",
+            url: "https://wiki.resonite.com/OSC"
+        },
+        {
+            title: "Receive the height in Resonite",
+            body: "1. In your avatar’s Scene Inspector, add OSC_Receiver. Set HandlingUser to you, Port to " + port + " and AccessReason to Mid’s Den height. Allow OSC receiving when prompted.\n\n2. Add OSC_Value<float>. Drag the receiver into Handler, set Path to /midsden/height and set ArgumentIndex to 0.\n\n3. Click Resend in the companion. In the inspector, Value should show the website height in metres.",
+            tip: "If Value stays at 0, check IsListening, the path, and the saved destination " + host + ":" + port + ".",
+            url: "https://wiki.resonite.com/Component:OSC_Value"
+        },
+        {
+            title: "Tell Resonite how tall this avatar is",
+            body: "Measure your avatar standing upright in metres. At the same size, use User Root Global Scale to read your UserRoot’s scale. Divide the measured height by that number and save the result as a fixed float in ProtoFlux.\n\nFor example, an avatar measuring 1.8 m at scale 0.9 stands 2 m tall at scale 1. Keep 2 as its reference height.",
+            tip: "The reference lets Resonite turn metres into the right resize amount for this avatar. Repeat the measurement if you change the avatar’s proportions.",
+            url: "https://wiki.resonite.com/User_Scale"
+        },
+        {
+            title: "Wire up resizing and test",
+            body: "With the ProtoFlux Tool, create a Source from OSC_Value’s Value field. Connect it to a float Divide node and put the fixed reference height in the second input. Wire the result into Scale on Set User Scale.\n\nFeed Value into Fire On Change. Set OnlyForUser to the wearer and route OnChanged through an If check for Value > 0 before calling Set User Scale. Connect the same wearer to User User Root and wire its output into UserRoot. Set AnimationTime to 0.",
+            tip: "Try a nearby website height and check the result in a world that allows resizing. With a reference height of 2 m, a target of 3 m gives a scale of 1.5. The companion handles smoothing.",
+            url: "https://wiki.resonite.com/ProtoFlux:SetUserScale"
+        }
     ] : appId === "chilloutvr" ? [
         {title:"Enable OSC", body:"In ChilloutVR, open Settings → Implementation → OSC and enable it. Wear your avatar, then wait for “ChilloutVR detected” in the companion.", tip:"The companion uses the receive port advertised by ChilloutVR. Keep its default OSCQuery name prefix. If both games run together, VRChat and ChilloutVR need different receive ports.", url:"https://docs.chilloutvr.net/chilloutvr/game/osc/"},
         {title:"Choose what to control", body:"Add a mapping and choose a website measurement. Open the Avatar parameter dropdown to browse your avatar’s parameters, or type to search. Choose a writable parameter and save.", tip:"Your avatar must already have an animation or parameter that controls the property. OSC cannot add one.", url:"https://docs.chilloutvr.net/cck/components/cvr-avatar/"},
@@ -74,7 +96,14 @@ Popup {
                     width:scroll.width; spacing:14
                     Text { text:guide.page.title; color:"#eef2f7"; font.pixelSize:17; font.weight:Font.DemiBold; wrapMode:Text.WordWrap; Layout.fillWidth:true }
                     Text { text:guide.page.body; textFormat:Text.PlainText; color:"#d0d9e3"; font.pixelSize:13; lineHeight:1.3; wrapMode:Text.WordWrap; Layout.fillWidth:true }
-                    Text { visible:guide.appId === "resonite" && guide.step === 1 && guide.mappings.length > 0; text:guide.mappings.map(m => m.name + " → " + m.address + " · " + (m.kind === "bool" ? "int (0/1)" : m.kind)).join("\n"); textFormat:Text.PlainText; color:"#dfc48d"; font.pixelSize:12; wrapMode:Text.WrapAnywhere; Layout.fillWidth:true }
+                    Text {
+                        readonly property var otherMappings: guide.mappings.filter(m => m.mappingEnabled && m.address !== "/midsden/height" && m.address !== "/midsden/scale")
+                        visible: guide.appId === "resonite" && guide.step === 1 && otherMappings.length > 0
+                        text: "For your other mappings, use the paths below. Add an OSC_Value<float> for decimals or OSC_Value<int> for whole numbers and on/off values.\n\n"
+                            + otherMappings.map(m => m.name + " → " + m.address + " · " + (m.kind === "bool" ? "int (0/1)" : m.kind)).join("\n")
+                        textFormat: Text.PlainText; color: "#dfc48d"; font.pixelSize: 12
+                        wrapMode: Text.Wrap; Layout.fillWidth: true
+                    }
                     Text { text:guide.page.tip; textFormat:Text.PlainText; color:"#93a4b7"; font.pixelSize:12; lineHeight:1.25; wrapMode:Text.WordWrap; Layout.fillWidth:true }
                 }
             }

@@ -197,7 +197,7 @@ class QuickInterfaceTests(unittest.TestCase):
   self.evaluate(self.root.findChild(QObject,'settingsPopup'),'close()')
   self.bridge.eyeHeightPreset();QTest.qWait(120)
   picker=self.root.findChild(QObject,'parameterSearch').parentItem()
-  self.assertEqual(picker.property('address'),'/midsden/scale')
+  self.assertEqual(picker.property('address'),'/midsden/height')
   self.assertEqual(picker.property('listTitle'),'SUGGESTED RECEIVER PATHS')
   self.assertFalse(self.warnings,self.warnings)
 
@@ -249,6 +249,7 @@ class QuickInterfaceTests(unittest.TestCase):
    guide=self.root.findChild(QObject,'setupGuide')
    self.assertTrue(guide.property('visible'));self.assertEqual(guide.property('step'),0)
    self.assertFalse(self.root.findChild(QObject,'settingsPopup').property('visible'))
+   if game=='resonite':self.assertIn('companion sends 3 to /midsden/height',self.evaluate(guide,'page.body'))
    length=self.evaluate(guide,'steps.length')
    for step in range(length):
     self.assertEqual(guide.property('step'),step)

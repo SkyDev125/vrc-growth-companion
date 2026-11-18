@@ -4,6 +4,7 @@ import math
 import threading
 import time
 import avatar_mapping as mapping
+import resonite
 from growth_options import normalize
 
 
@@ -91,7 +92,7 @@ class Transition:
 
 def wants_smoothing(item, sources, enabled):
     source=sources.get(item['source'],{})
-    default=item['target'] in ('/avatar/eyeheight','/midsden/scale') or source.get('syncTarget','none')!='none'
+    default=item['target'] in ('/avatar/eyeheight', resonite.HEIGHT_PATH, resonite.SCALE_PATH) or source.get('syncTarget','none')!='none'
     return enabled and item['kind']=='float' and item.get('smooth',default)
 
 
