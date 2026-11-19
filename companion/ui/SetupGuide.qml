@@ -15,9 +15,9 @@ Popup {
     readonly property var activeMappings: mappings.filter(mapping => mapping.mappingEnabled)
     readonly property var heightPage: ({
         "title": "Resize the whole avatar",
-        "body": "Use Presets → Avatar height to send metres to /midsden/height. If you’re building the receiver, use PositionAtUser with View and GroundProjectedHead to get the wearer’s eyes and floor. Convert both positions to user-root space. A capture button saves their height difference while the wearer stands upright. The resize graph divides the incoming metres by that saved reference and passes the result to Set User Scale.",
-        "tip": "This is an in-game wiring recipe. It samples the wearer’s position once, so crouching later won’t change the resize target.",
-        "url": "https://wiki.resonite.com/Component:PositionAtUser"
+        "body": "Use Presets → Avatar height to send your target in metres to /midsden/height. In Resonite, set up the receiver once for your avatar. The setup guide includes a tool to check the avatar’s own eye height and steps for wiring it to the resize graph.",
+        "tip": "Use a standing capture if your rig has no verified eye height. In VR, that fallback can reflect headset height.",
+        "url": "https://github.com/SkyDev125/vrc-growth-companion/blob/main/companion/RESONITE.md#avatar-height"
     })
     property var steps: appId === "resonite" ? [
         {
@@ -123,7 +123,7 @@ Popup {
         Rectangle { Layout.fillWidth:true; height:1; color:"#303b4a" }
         RowLayout {
             Layout.fillWidth:true; spacing:8
-            ActionButton { text:"Official reference ↗"; quiet:true; onClicked:Qt.openUrlExternally(guide.page.url) }
+            ActionButton { text:guide.heightHelp ? "Height setup guide ↗" : "Official reference ↗"; quiet:true; onClicked:Qt.openUrlExternally(guide.page.url) }
             Item { Layout.fillWidth:true }
             ActionButton { objectName:"setupGuideBack"; text:"Back"; quiet:true; enabled:guide.heightHelp || guide.step > 0; onClicked:{if (guide.heightHelp) guide.heightHelp = false; else guide.step--} }
             ActionButton { objectName:"setupGuideNext"; text:guide.step === guide.steps.length - 1 ? "Done" : "Next"; primary:true; onClicked:{if(guide.step < guide.steps.length - 1) guide.step++; else guide.close()} }
