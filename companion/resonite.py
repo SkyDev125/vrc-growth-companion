@@ -26,11 +26,10 @@ def height_preset():
 
 
 def parameter_options(sources):
-    result = [
-        {'name': 'Avatar height', 'address': HEIGHT_PATH, 'kind': 'float', 'writable': True},
-        {'name': 'Avatar scale (legacy)', 'address': SCALE_PATH, 'kind': 'float', 'writable': True},
-    ]
-    result.extend({'name':s['name'],'address':'/midsden/measurements/'+quote(s['id'],safe='-_'),
-                   'kind':'float','writable':True} for s in sources)
+    result = [{'name': 'Avatar height', 'address': HEIGHT_PATH, 'source': 'height', 'kind': 'float', 'writable': True}]
+    result.extend({
+        'name': source['name'], 'address': '/midsden/measurements/' + quote(source['id'], safe='-_'),
+        'source': source['id'], 'kind': 'float', 'writable': True,
+    } for source in sources if source['id'] != 'height')
     return result
 

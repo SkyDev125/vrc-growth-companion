@@ -21,6 +21,7 @@ ApplicationWindow {
     property string connectionError: ""
     property string growthError: ""
     property int draftIndex: -1
+    property string suggestedReceiverPath: ""
     ListModel { id: mappingModel }
     function updateState() {
         state = JSON.parse(bridge.stateJson)
@@ -51,6 +52,7 @@ ApplicationWindow {
         sourceSelect.model = sourceOptions
         sourceSelect.currentIndex = sourceOptions.findIndex(s => s.value === draft.source)
         parameter.parameters = editorData.parameters
+        suggestedReceiverPath = ""
         parameter.setAddress(draft.target)
         kindSelect.currentIndex = ["float","int","bool"].indexOf(draft.kind)
         modeSelect.currentIndex = ["value","ratio","range","threshold"].indexOf(draft.mode)
@@ -264,7 +266,20 @@ ApplicationWindow {
                 columns: 2; rowSpacing: 7; columnSpacing: 14; Layout.fillWidth: true
                 FieldLabel { text: "Measurement" }
                 FieldLabel { text: window.state.targetApp === "resonite" ? "Receiver path" : "Avatar parameter" }
-                SelectField { id: sourceSelect; Layout.preferredWidth: 175; Layout.fillWidth: true; model: [] }
+                SelectField {
+                    id: sourceSelect
+                    objectName: "mappingSource"
+                    Layout.preferredWidth: 175; Layout.fillWidth: true; model: []
+                    displayText: currentText || "Choose a measurement"
+                    onActivated: {
+                        if (window.editorData.platform !== "resonite" || window.draftIndex >= 0) return
+                        if (parameter.address && parameter.address !== window.suggestedReceiverPath) return
+                        var receiver = parameter.parameters.find(p => p.source === currentValue)
+                        if (!receiver) return
+                        window.suggestedReceiverPath = receiver.address
+                        parameter.setAddress(receiver.address)
+                    }
+                }
                 ParameterPicker {
                     id: parameter
                     listTitle: window.state.targetApp === "resonite" ? "SUGGESTED RECEIVER PATHS" : "AVATAR PARAMETERS"
@@ -276,8 +291,6 @@ ApplicationWindow {
                             smoothMapping.checked = true
                             sourceSelect.currentIndex = sourceSelect.model.findIndex(s => s.value === "height")
                             modeSelect.currentIndex = 0
-                        } else if (address === "/midsden/scale") {
-                            sourceSelect.currentIndex=sourceSelect.model.findIndex(s => s.value === "height");modeSelect.currentIndex=1;smoothMapping.checked=true
                         } else if (kind === "bool") modeSelect.currentIndex = 3
                     }
                 }

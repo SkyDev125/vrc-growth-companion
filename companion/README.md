@@ -12,7 +12,7 @@ Settings are stored in your user application settings directory and survive app 
 
 ## Resonite
 
-Choose **Resonite** in Settings → Connection. The app keeps separate ports and mappings and offers an **Avatar height** preset that sends metres, custom OSC receiver paths and an in-app **Setup guide**. Configure a receiver and resize graph once in Resonite. See [Resonite setup](RESONITE.md). The status stays “receiver unverified” because UDP cannot confirm delivery.
+Choose **Resonite** in Settings → Connection. Choose any measurement and use the suggested receiver path or enter your own. **Setup guide** lists the paths and types for your current mappings. **Avatar height** is an optional preset for a Resonite receiver that resizes the whole avatar. See [Resonite setup](RESONITE.md). The status stays “receiver unverified” because UDP cannot confirm delivery.
 
 ## ChilloutVR
 

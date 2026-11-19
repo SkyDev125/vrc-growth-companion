@@ -1,37 +1,27 @@
-# Set your Resonite avatar’s height from Mid’s Den
+# Send a measurement to Resonite
 
-If Mid’s Den says **3 m**, the **Avatar height** preset sends **3** to Resonite. Set up an OSC receiver and a small ProtoFlux graph once on the avatar you want to resize. After that, you can work in metres.
+Use the same setup for a tail length, a volume, a custom counter, or any other measurement from Mid’s Den. Start with a field or graph on your Resonite object that can use the value.
 
-## Send the height
+1. **Pick a measurement.** In the companion, choose **Settings → App → Resonite**, then **New mapping**. Select the measurement and keep its suggested receiver path, or enter the path your object already uses. **Current value** sends the number in its website unit. A tail length of 30 cm sends `30`, so use a field that expects centimetres or select **Map a range** to match what the field expects.
+2. **Receive the number.** In Resonite’s Scene Inspector, add `OSC_Receiver` to your object. Set `HandlingUser` to yourself, enter the OSC port shown in the companion (usually `9002`), give it an `AccessReason`, and allow receiving when prompted. Add an `OSC_Value` for the mapping and fill in `Handler` with that receiver, `Path` with the path shown in the companion, and `ArgumentIndex` with `0`. Use `float` for decimals and `int` for whole numbers and on/off values. The app’s **Setup guide** lists the paths and types for your enabled mappings.
+3. **Try it.** Click **Resend** and check `OSC_Value.Value`. If it stays empty, check `IsListening`, the port and the path. For a direct connection to a numeric field, set up `OSC_Field` with the same settings in place of `OSC_Value`, then drag the field into `Field`. For custom behaviour, read `OSC_Value.Value` in ProtoFlux. Convert on/off values from `0` or `1` there.
 
-In the companion, select **Settings → Connection → App → Resonite**. Leave the IP at `127.0.0.1` if both apps run on the same computer. Note the OSC port shown in Settings. It defaults to `9002`.
+On the same computer, keep the companion IP at `127.0.0.1`. One receiver can handle many paths. The companion sends changes and can resend the current values after a reload. You can check receipt in the Resonite inspector. [OSC receiver](https://wiki.resonite.com/Component:OSC_Receiver) · [OSC Value](https://wiki.resonite.com/Component:OSC_Value) · [OSC Field](https://wiki.resonite.com/Component:OSC_Field)
 
-Choose **Presets → Avatar height**, then **Save mapping**. The preset uses **Height**, **Current value**, and `/midsden/height`. Fresh Resonite profiles already include it.
+## Avatar height
 
-## Receive it in Resonite
+Use **Presets → Avatar height** for a receiver that scales the whole wearer. This sends metres as a `float` to `/midsden/height`. If an existing receiver already uses that path, save the mapping and use **Resend**. An older receiver on `/midsden/scale` can keep using its saved mapping.
 
-1. Wear the avatar. In its Scene Inspector, add an `OSC_Receiver` component. Set `HandlingUser` to yourself, `Port` to the companion’s port, and `AccessReason` to “Mid’s Den height”. Allow OSC receiving when prompted. Check that `IsListening` is on.
-2. Add `OSC_Value<float>`. Drag the receiver into `Handler`, enter `/midsden/height` in `Path`, and set `ArgumentIndex` to `0`.
-3. Click **Resend** in the companion. Check `OSC_Value.Value` in the inspector. It should show the website height in metres. If it stays at zero, check the receiver, port and path before building the graph.
+### Build a height receiver in Resonite
 
-See the [OSC Receiver](https://wiki.resonite.com/Component:OSC_Receiver) and [OSC Value](https://wiki.resonite.com/Component:OSC_Value) references for inspector screenshots.
+Set up `OSC_Value<float>` at `/midsden/height` as above. The graph should capture standing eye height once using positions that Resonite already exposes, then reuse that reference while you play. This gives an eye-height target. Use a flat floor and normal first-person view for the capture. [Set User Scale](https://wiki.resonite.com/ProtoFlux:SetUserScale) · [Position At User](https://wiki.resonite.com/Component:PositionAtUser)
 
-## Connect the height to resizing
+1. **Read the wearer.** Put the graph under the avatar. Use **Get Active User Self** for the wearer, **User User Root** for the resize command, and **User Root Slot** for coordinate conversion. Create two helper slots with `PositionAtUser` set to the wearer. Use `PositionSource` **View** for one and **GroundProjectedHead** for the other, with zero position offsets. Set each component’s `PositionDrive` to the `Position` field of its helper slot. Read both world positions with **Global Transform**. [Get Active User Self](https://wiki.resonite.com/ProtoFlux:GetActiveUserSelf) · [User Root Slot](https://wiki.resonite.com/ProtoFlux:UserRootSlot)
+2. **Capture the reference.** Convert both positions into the **User Root Slot** using **Global Point To Local**. Subtract the floor position’s Y from the view position’s Y. Make a **Capture standing height** button and wire its **Pressed** event to store that result in a `ValueField<float>` when it is positive. Only accept a capture from the wearer. Stand upright and press it once. Retake it if you change avatars or change the avatar’s proportions. [Global Point To Local](https://wiki.resonite.com/ProtoFlux:GlobalPointToLocal) · [Button Events](https://wiki.resonite.com/ProtoFlux:ButtonEvents)
+3. **Apply the incoming height.** Divide `OSC_Value.Value` by the stored reference. Wire the result into `Scale` on **Set User Scale** and set `AnimationTime` to `0` so the companion can smooth changes. Use **Fire On Change** on the OSC value, with `OnlyForUser` set to the wearer, to run the resize. Apply only when both the received number and stored reference are positive. Run the same check after a successful capture so the latest value takes effect even if it arrived before calibration. [Fire On Change](https://wiki.resonite.com/ProtoFlux:FireOnChange)
 
-Resonite’s **Set User Scale** node expects a scale factor. An avatar that stands 2 m tall at scale 1 needs a scale of 1.5 to reach 3 m. A different avatar can need a different factor for the same target. [User scale](https://wiki.resonite.com/User_Scale) · [Set User Scale](https://wiki.resonite.com/ProtoFlux:SetUserScale)
+Start with a small change in a world that allows resizing. A custom rig or an overridden view can produce an unsuitable reference. If the game’s view and floor positions do not describe that avatar, a creator can supply a known standing eye-height reference in the same user-root space. The companion builds and tests its outgoing OSC. The capture graph is a wiring recipe for Resonite, and still needs an in-game check.
 
-**Measure once.** Stand upright and measure the avatar in metres. Read **User Root Global Scale** from your avatar’s `UserRoot` at that same size. Divide the measured height by that scale and store it as a fixed float. For instance, 1.8 m measured at scale 0.9 gives a reference height of 2 m. Measure from the floor to the same point you mean by “height” on the website. Remeasure if you change the avatar’s proportions or the reference changes. [User Root Global Scale](https://wiki.resonite.com/ProtoFlux:UserRootGlobalScale)
+### What about `VRIKAvatar.AvatarHeight`?
 
-**Wire the value.** With the ProtoFlux Tool equipped, grab the `Value` field name on `OSC_Value<float>` and choose **Source** in the context menu. Connect it to a float **Divide** node. Use the incoming value as the first input and your fixed reference height as the second input. Connect **Divide** to `Scale` on **Set User Scale**. Connect the wearer to **User User Root** and wire its output to `UserRoot`. Set `AnimationTime` to `0` so the companion can handle smoothing. [Using the ProtoFlux Tool](https://wiki.resonite.com/ProtoFlux#Interfacing_With_Components_/_Slots)
-
-**Call it when the height changes.** Connect the same **Source** to `Value` on **Fire On Change**. Set `OnlyForUser` to the avatar’s wearer. Connect `OnChanged` to an **If** node with the condition `Value > 0`, then connect its true output to the impulse input on **Set User Scale**. This skips the initial zero before the first packet arrives. Keep the setup scoped to the wearer. [Fire On Change](https://wiki.resonite.com/ProtoFlux:FireOnChange)
-
-Test with a nearby height change in a world that allows resizing. If `Value` changes in the inspector and the avatar stays the same, check the graph’s impulse wiring, `UserRoot`, and the world’s scaling rules. **Resend** sends the latest value again after a receiver is reloaded. **Fire On Change** reacts when the received number changes.
-
-## Existing receivers and other measurements
-
-An existing **Avatar scale (legacy)** mapping still sends the website’s current height divided by its starting height to `/midsden/scale`. Keep that mapping for an existing receiver. To switch the same avatar to the new preset, point the new graph at `/midsden/height` and disable the old resize mapping so both graphs do not drive the same avatar.
-
-For other measurements, use the exact path shown on the mapping, with `OSC_Value<float>` for decimals or `OSC_Value<int>` for whole numbers and on/off values. On/off arrives as `0` or `1`. **Current value** uses the measurement’s saved unit. Connect the received value to the avatar field or ProtoFlux graph for that property.
-
-The companion’s **receiver unverified** status means it has sent UDP without a game acknowledgement. The outgoing metre values and legacy ratios are covered by local UDP tests. The resizing graph still needs validation on a live avatar.
+Many humanoid avatars include `VRIKAvatar`. Its `AvatarHeight` is a floor-to-eye reference, and `HeightCompensation` adjusts the fit relative to tracking. The supplied `77.291046 × 0.023107` example gives about `1.786 m`. Before using that as an automatic source, compare the result with the game’s standing eye and floor positions at two different wearer scales. Confirm which slot supplies the transform for that rig and whether the result already includes compensation. Treat missing, invalid or inconsistent rig data as unavailable. The companion’s OSC connection sends values and does not read avatar components. [VRIKAvatar fields](https://wiki.resonite.com/Component:VRIKAvatar) · [Resonite user scale](https://wiki.resonite.com/User_Scale)

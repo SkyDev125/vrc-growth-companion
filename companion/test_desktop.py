@@ -102,8 +102,11 @@ class DesktopTests(unittest.TestCase):
   self.assertEqual(self.window.saveConnection('127.0.0.1','19000'),'')
   self.assertEqual(self.window.setTargetApp('resonite'),'')
   self.assertEqual(self.window.profile,'resonite');self.assertEqual(self.window.config['oscPort'],9002)
-  self.window.openEditor(0)
-  self.assertEqual(json.loads(self.window.editorJson)['parameters'][0]['address'],'/midsden/height')
+  self.assertEqual(self.window.config['profiles']['resonite'], [])
+  self.window.eyeHeightPreset()
+  parameters = json.loads(self.window.editorJson)['parameters']
+  self.assertEqual(parameters[0]['address'], '/midsden/height')
+  self.assertNotIn('/midsden/scale', [entry['address'] for entry in parameters])
   self.assertEqual(self.window.saveMapping(json.dumps(self.window.editor['item'])),'')
   self.assertEqual(self.window.saveConnection('127.0.0.1','19002'),'')
   self.assertEqual(self.window.setTargetApp('vrchat'),'')
@@ -117,6 +120,8 @@ class DesktopTests(unittest.TestCase):
   self.assertFalse(self.window.detected)
  def test_resonite_worker_never_uses_vrchat_discovery(self):
   self.window.setTargetApp('resonite');stop=threading.Event();writes=[]
+  self.window.eyeHeightPreset()
+  self.assertEqual(self.window.saveMapping(json.dumps(self.window.editor['item'])), '')
   with patch.object(stop,'wait',side_effect=lambda _:stop.set()),patch.object(desktop.mapping,'discover') as discover,patch.object(desktop.mapping,'fetch_measurements',return_value=self.window.sources),patch.object(desktop.mapping,'send_mapping',side_effect=lambda c,i,s:writes.append(i)):
    self.window.sync(stop)
   discover.assert_not_called()

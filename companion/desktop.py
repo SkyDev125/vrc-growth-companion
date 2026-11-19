@@ -45,7 +45,7 @@ class CompanionWindow(QObject):
         mapping.migrate_profiles(self.config)
         if self.config.get('targetApp')=='resonite':
             self.profile=resonite.PROFILE
-            self.config['profiles'].setdefault(self.profile,[resonite.height_preset()])
+            self.config['profiles'].setdefault(self.profile, [])
         elif self.config.get('targetApp')=='chilloutvr':
             self.profile=chilloutvr.MANUAL_PROFILE
             self.config['profiles'].setdefault(self.profile,[])
@@ -65,7 +65,6 @@ class CompanionWindow(QObject):
         target_labels = {
             '/avatar/eyeheight': 'Eye height',
             resonite.HEIGHT_PATH: 'Avatar height',
-            resonite.SCALE_PATH: 'Avatar scale (legacy)',
         }
         for item in self.config['profiles'].get(self.profile,[]):
             source=sources.get(item['source']);enabled=item.get('enabled',True)
@@ -116,6 +115,9 @@ class CompanionWindow(QObject):
         item=copy.deepcopy(items[index]) if index>=0 else {'source':self.sources[0]['id'] if self.sources else '',
             'target':'','kind':'float','mode':'range','enabled':True,'inputMin':0,'inputMax':10,'outputMin':0,'outputMax':1,'threshold':1}
         item['platform']=self.config.get('targetApp','vrchat')
+        if index < 0 and item['platform'] == 'resonite':
+            item['source'] = ''
+            item['mode'] = 'value'
         self.editor={'index':index,'profile':self.profile,'item':item};self.editor_error='';self.editorChanged.emit()
 
     @Slot()
@@ -196,7 +198,7 @@ class CompanionWindow(QObject):
                     if not 1<=port<=65535:raise ValueError()
                 except (ValueError,TypeError,AttributeError):host='127.0.0.1';port=resonite.DEFAULT_PORT if target=='resonite' else 9000
                 self.config.update(targetApp=target,oscHost=host,oscPort=port)
-                if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE,[resonite.height_preset()])
+                if target=='resonite':self.config['profiles'].setdefault(resonite.PROFILE, [])
                 elif target=='chilloutvr':self.config['profiles'].setdefault(chilloutvr.MANUAL_PROFILE,[])
                 try:core.save_config(self.config,settings_path())
                 except OSError:self.config=previous;raise
@@ -306,7 +308,7 @@ class CompanionWindow(QObject):
                 with self.lock:
                     if request_epoch!=self.motion_epoch:continue
                     if profile not in self.config['profiles']:
-                        self.config['profiles'][profile]=[] if app=='chilloutvr' else [resonite.height_preset() if is_resonite else mapping.eye_height_preset()]
+                        self.config['profiles'][profile] = [mapping.eye_height_preset()] if app == 'vrchat' else []
                         core.save_config(self.config,settings_path())
                     if app=='chilloutvr' and discovery and discovery.get('oscPort') and self.config.get('targetApp')==app:
                         port=discovery['oscPort']
